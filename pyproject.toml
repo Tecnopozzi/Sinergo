@@ -27,20 +27,12 @@ voce = [
     "supertonic==1.3.1",
     "av>=16",
 ]
-# Chatterbox: scegli UN extra in base alla scheda (NVIDIA si → cuda, no → cpu).
-# installa.py --sinergo lo fa da solo; a mano: uv sync --extra voce --extra chatterbox-cpu|cuda
-chatterbox-cpu = [
-    "chatterbox-tts==0.1.7",
-    # BOSGAME: torch 2.6.0+cpu (indice pytorch-cpu sotto). setuptools<81 serve a perth.
-    "torch>=2.6.0",
-    "torchaudio>=2.6.0",
-    "setuptools>=70,<81",
-]
-chatterbox-cuda = [
-    "chatterbox-tts==0.1.7",
-    "torch>=2.6.0",
-    "torchaudio>=2.6.0",
-    "setuptools>=70,<81",
+# Chatterbox via codec.cpp (C++/ggml): una ruota, Vulkan+CPU su Windows, solo CPU su Linux x86_64.
+# Altre piattaforme (macOS, arm): l'extra non installa nulla; il motore resta non disponibile.
+# installa.py --sinergo: uv sync --extra voce --extra chatterbox
+chatterbox = [
+    "codec-cpp @ https://github.com/Tecnopozzi/codec.cpp/releases/download/v0.1.0-kairos1/codec_cpp-0.1.0-py3-none-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "codec-cpp @ https://github.com/Tecnopozzi/codec.cpp/releases/download/v0.1.0-kairos1/codec_cpp-0.1.0-py3-none-manylinux_2_31_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 dev = [
     "pytest>=8.0",
@@ -56,33 +48,3 @@ packages = ["collegato", "decisori", "media", "sinergo", "transcribe"]
 
 [tool.uv]
 package = false
-# chatterbox-tts pinna numpy 1.x; kokoro-onnx vuole numpy 2.x. In pratica chatterbox
-# gira con numpy 2 (stesso vincolo gia' usato dal resto dell'extra voce).
-override-dependencies = ["numpy>=2.0.2"]
-conflicts = [
-    [
-        { extra = "chatterbox-cpu" },
-        { extra = "chatterbox-cuda" },
-    ],
-]
-
-[tool.uv.sources]
-# Indici PyTorch solo sotto 3.14 (cu124/cpu arrivano a 2.6); da 3.14 in su resta PyPI.
-torch = [
-    { index = "pytorch-cpu", extra = "chatterbox-cpu", marker = "python_full_version < '3.14'" },
-    { index = "pytorch-cu124", extra = "chatterbox-cuda", marker = "python_full_version < '3.14'" },
-]
-torchaudio = [
-    { index = "pytorch-cpu", extra = "chatterbox-cpu", marker = "python_full_version < '3.14'" },
-    { index = "pytorch-cu124", extra = "chatterbox-cuda", marker = "python_full_version < '3.14'" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true

@@ -333,3 +333,84 @@ def test_soglie_negative_o_non_numeriche_rifiutate(banco):
         })
         assert corpo["ok"] is False, soglie
         assert corpo["motivo"] == "motore"
+
+
+def _banco_prova_chatterbox(voce, monkeypatch, tmp_path, misure):
+    """misure: dict modello -> {rtf, primo_audio_s}. Traccia scarica q8."""
+    scaricati = []
+    monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(
+        voce.modelli, "pronto",
+        lambda modello, *_a, **_k: (
+            modello in scaricati if modello == voce.MODELLO_CHATTERBOX_Q8 else True
+        ),
+    )
+
+    def fake_scarica(modello, cartella_dati=None, progresso=None):
+        scaricati.append(modello)
+
+    monkeypatch.setattr(voce.modelli, "scarica", fake_scarica)
+
+    def fake_misura(motore, cartella=None, *, modello=None):
+        chiave = modello or voce.MODELLO_DI[motore]
+        return dict(misure[chiave])
+
+    monkeypatch.setattr(voce, "misura_velocita", fake_misura)
+    return scaricati
+
+
+def test_prova_chatterbox_q4_verde_non_scarica_q8(tmp_path, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    scaricati = _banco_prova_chatterbox(voce, monkeypatch, tmp_path, {
+        voce.MODELLO_CHATTERBOX_Q4: {"rtf": 0.2, "primo_audio_s": 0.3},
+    })
+    out = voce._prova_chatterbox(tmp_path, voce.SOGLIE_DEFAULT)
+    assert out["modello"] == voce.MODELLO_CHATTERBOX_Q4
+    assert scaricati == []
+
+
+def test_prova_chatterbox_q4_rosso_q8_migliore(tmp_path, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    scaricati = _banco_prova_chatterbox(voce, monkeypatch, tmp_path, {
+        voce.MODELLO_CHATTERBOX_Q4: {"rtf": 2.0, "primo_audio_s": 0.5},
+        voce.MODELLO_CHATTERBOX_Q8: {"rtf": 0.4, "primo_audio_s": 0.4},
+    })
+    out = voce._prova_chatterbox(tmp_path, voce.SOGLIE_DEFAULT)
+    assert out["modello"] == voce.MODELLO_CHATTERBOX_Q8
+    assert out["rtf"] == 0.4
+    assert scaricati == [voce.MODELLO_CHATTERBOX_Q8]
+
+
+def test_prova_chatterbox_q4_rosso_q8_peggiore_resta_q4(tmp_path, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    scaricati = _banco_prova_chatterbox(voce, monkeypatch, tmp_path, {
+        voce.MODELLO_CHATTERBOX_Q4: {"rtf": 6.0, "primo_audio_s": 0.5},
+        voce.MODELLO_CHATTERBOX_Q8: {"rtf": 7.0, "primo_audio_s": 0.6},
+    })
+    out = voce._prova_chatterbox(tmp_path, voce.SOGLIE_DEFAULT)
+    assert out["modello"] == voce.MODELLO_CHATTERBOX_Q4
+    assert out["rtf"] == 6.0
+    assert scaricati == [voce.MODELLO_CHATTERBOX_Q8]
+
+
+def test_parla_usa_modello_salvato(banco, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_leggi", lambda cartella: {
+        "ascolto": {"motore": None, "stato": None},
+        "voce_chiacchierata": {
+            "motore": "chatterbox", "stato": "pronto",
+            "modello": voce.MODELLO_CHATTERBOX_Q8,
+        },
+        "voce_messaggi": {"motore": None, "stato": None},
+    })
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    visti = []
+
+    def fake_sint(motore, testo, **kwargs):
+        visti.append(kwargs.get("modello"))
+        return wav_silenzio(0.05)
+
+    monkeypatch.setattr(voce, "_sintetizza", fake_sint)
+    corpo = risposta(banco, "parla", {"testo": "Ciao", "per": "chiacchierata"})
+    assert corpo["ok"] is True
+    assert visti == [voce.MODELLO_CHATTERBOX_Q8]

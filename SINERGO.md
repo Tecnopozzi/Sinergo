@@ -27,7 +27,8 @@ Kairos può assegnare a questa macchina i ruoli **ascolto** (trascrizione),
 | `prova_motore` | Misura `rtf` e `primo_audio_s` su 3 frasi fisse → `esiti` chiacchierata/messaggi |
 
 Motori: ascolto solo **parakeet**; le voci **kokoro** (fp32), **supertonic** o
-**chatterbox** (Chatterbox Multilingual / ResembleAI, su CPU, AMD o NVIDIA).
+**chatterbox** (Chatterbox Multilingual via [codec.cpp](https://github.com/Tecnopozzi/codec.cpp)
+v0.1.0-kairos1: una sola via per CPU, AMD e NVIDIA/Vulkan).
 Dopo il download, chatterbox fa da solo la prova di velocità. Soglie dal corpo
 (`soglie`: chiacchierata `{rtf_max, primo_audio_max_s}`, messaggi `{rtf_max}`;
 default 0,5 / 1,0 / 8,0): rosso per quel ruolo → `stato: errore, motivo: lento`
@@ -38,9 +39,8 @@ alla lettura.
 
 Kairos sceglie solo ruolo e motore, mai un URL. I pesi stanno nella cartella dati di
 Sinergo (`~/.config/localrouter/voce/` su Linux), fuori dal codice. Dipendenze
-opzionali: `uv sync --extra voce` più **un** extra chatterbox scelto dalla scheda —
-`chatterbox-cuda` se c’è GPU NVIDIA, altrimenti `chatterbox-cpu` (torch 2.6 CPU;
-`setuptools<81` per perth). `installa.py --sinergo` lo sceglie da solo via
-`nvidia-smi`. Senza l'extra, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`.
+opzionali: `uv sync --extra voce --extra chatterbox` (ruota ufficiale codec.cpp;
+su macOS/arm l'extra non installa nulla). `installa.py --sinergo` lo fa da solo.
+Senza l'extra, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`.
 La scheda riporta i tre ruoli con `motore`, `stato` e, per le voci, `rtf` /
 `primo_audio_s` se misurati.

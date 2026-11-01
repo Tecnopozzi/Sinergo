@@ -20,11 +20,13 @@ RUOLI_VOCE = ("voce_chiacchierata", "voce_messaggi")
 RUOLI = ("ascolto",) + RUOLI_VOCE
 MOTORI_ASCOLTO = frozenset({"parakeet"})
 MOTORI_VOCE = frozenset({"kokoro", "supertonic", "chatterbox"})
+MODELLO_CHATTERBOX_Q4 = "chatterbox-mtl"
+MODELLO_CHATTERBOX_Q8 = "chatterbox-mtl-q8"
 MODELLO_DI = {
     "parakeet": "nemo-parakeet-tdt-0.6b-v3",
     "kokoro": "kokoro-v1.0",
     "supertonic": "supertonic-3",
-    "chatterbox": "chatterbox-mtl",
+    "chatterbox": MODELLO_CHATTERBOX_Q4,
 }
 TESTO_MAX = 4000
 CHIAVI_CORPO_PREPARA = frozenset({"ruolo", "motore", "soglie"})
@@ -78,7 +80,7 @@ def _copia_riga(riga: object) -> dict | None:
         "motore": riga.get("motore"),
         "stato": riga.get("stato"),
     }
-    for chiave in ("motivo", "rtf", "primo_audio_s"):
+    for chiave in ("motivo", "rtf", "primo_audio_s", "modello"):
         if chiave in riga:
             out[chiave] = riga[chiave]
     return out
@@ -121,7 +123,7 @@ def ruoli_scheda(cartella: Path | None = None) -> dict:
         riga = stato[ruolo]
         scheda = {"motore": riga.get("motore"), "stato": riga.get("stato")}
         if ruolo in RUOLI_VOCE:
-            for chiave in ("rtf", "primo_audio_s", "motivo"):
+            for chiave in ("rtf", "primo_audio_s", "motivo", "modello"):
                 if chiave in riga:
                     scheda[chiave] = riga[chiave]
         elif "motivo" in riga:
@@ -134,8 +136,7 @@ def _dipendenze(motore: str) -> bool:
     try:
         import numpy  # noqa: F401
         if motore == "chatterbox":
-            import torch  # noqa: F401
-            import chatterbox.mtl_tts  # noqa: F401
+            import codec_cpp  # noqa: F401
             return True
         import onnxruntime  # noqa: F401
         if motore == "parakeet":
@@ -241,9 +242,9 @@ def _wav_secondi(audio: bytes) -> float:
 
 def _sintetizza(
     motore: str, testo: str, *, lingua: str = "it", voce: str | None = None,
-    cartella: Path | None = None,
+    cartella: Path | None = None, modello: str | None = None,
 ) -> bytes:
-    modello = MODELLO_DI[motore]
+    modello = modello or MODELLO_DI[motore]
     if motore == "kokoro":
         from . import tts_kokoro
         return tts_kokoro.sintetizza(
@@ -262,16 +263,20 @@ def _sintetizza(
     raise ValueError("motore sconosciuto")
 
 
-def misura_velocita(motore: str, cartella: Path | None = None) -> dict:
+def misura_velocita(
+    motore: str, cartella: Path | None = None, *, modello: str | None = None,
+) -> dict:
     """Prova fissa a 3 frasi: restituisce rtf e primo_audio_s."""
     if motore not in MOTORI_VOCE:
         raise ValueError("motore")
+    # Caricamento modello fuori dalla misura (una sintesi non cronometrata).
+    _sintetizza(motore, "Ciao", lingua="it", cartella=cartella, modello=modello)
     audio_tot = 0.0
     lavoro_tot = 0.0
     primo_audio_s = 0.0
     for i, frase in enumerate(FRASI_PROVA):
         inizio = time.monotonic()
-        audio = _sintetizza(motore, frase, lingua="it", cartella=cartella)
+        audio = _sintetizza(motore, frase, lingua="it", cartella=cartella, modello=modello)
         lavoro = time.monotonic() - inizio
         secondi = _wav_secondi(audio) if audio else 0.0
         if i == 0:
@@ -285,14 +290,34 @@ def misura_velocita(motore: str, cartella: Path | None = None) -> dict:
     }
 
 
+def _prova_chatterbox(cartella: Path | None, soglie: dict) -> dict:
+    """Misura q4; se chiacchierata rossa prova q8 e tiene il rtf piu' basso."""
+    misura_q4 = misura_velocita("chatterbox", cartella, modello=MODELLO_CHATTERBOX_Q4)
+    esiti_q4 = _esiti(misura_q4["rtf"], misura_q4["primo_audio_s"], soglie)
+    scelto = {**misura_q4, "modello": MODELLO_CHATTERBOX_Q4}
+    if esiti_q4["chiacchierata"] != "rosso":
+        return scelto
+    if not modelli.pronto(MODELLO_CHATTERBOX_Q8, cartella):
+        modelli.scarica(
+            MODELLO_CHATTERBOX_Q8, cartella_dati=cartella,
+            progresso=lambda m: logger.info("%s", m),
+        )
+    modelli.verifica(MODELLO_CHATTERBOX_Q8, cartella)
+    misura_q8 = misura_velocita("chatterbox", cartella, modello=MODELLO_CHATTERBOX_Q8)
+    if misura_q8["rtf"] < misura_q4["rtf"]:
+        return {**misura_q8, "modello": MODELLO_CHATTERBOX_Q8}
+    return scelto
+
+
 def _dopo_chatterbox(ruolo: str, motore: str, cartella: Path | None, soglie: dict) -> dict:
-    misura = misura_velocita(motore, cartella)
-    esiti = _esiti(misura["rtf"], misura["primo_audio_s"], soglie)
+    scelta = _prova_chatterbox(cartella, soglie)
+    esiti = _esiti(scelta["rtf"], scelta["primo_audio_s"], soglie)
     nuovo = {
         "motore": motore,
+        "modello": scelta["modello"],
         "stato": "pronto",
-        "rtf": misura["rtf"],
-        "primo_audio_s": misura["primo_audio_s"],
+        "rtf": scelta["rtf"],
+        "primo_audio_s": scelta["primo_audio_s"],
     }
     if esiti[ESITO_DI_RUOLO[ruolo]] == "rosso":
         nuovo["stato"] = "errore"
@@ -441,6 +466,7 @@ def _parla(corpo: dict, cartella: Path | None) -> dict:
         try:
             audio = _sintetizza(
                 riga["motore"], testo, lingua=lingua or "it", voce=voce, cartella=cartella,
+                modello=riga.get("modello"),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("parla fallito: %s", exc)
@@ -479,6 +505,15 @@ def _prova_motore(corpo: dict, cartella: Path | None) -> dict:
         return _errore("motore")
     with _inferenza["prova"]:
         try:
+            if motore == "chatterbox":
+                scelta = _prova_chatterbox(cartella, soglie)
+                return _ok({
+                    "rtf": scelta["rtf"],
+                    "primo_audio_s": scelta["primo_audio_s"],
+                    "esiti": _esiti(scelta["rtf"], scelta["primo_audio_s"], soglie),
+                    "soglie": soglie,
+                    "modello": scelta["modello"],
+                })
             misura = misura_velocita(motore, cartella)
         except Exception as exc:  # noqa: BLE001
             logger.warning("prova_motore %s fallito: %s", motore, exc)

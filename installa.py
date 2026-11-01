@@ -38,18 +38,6 @@ def avvio_automatico_sinergo(cartella: Path) -> None:
         winreg.SetValueEx(chiave, "Sinergo", 0, winreg.REG_SZ, comando)
 
 
-def _ha_nvidia() -> bool:
-    """True se nvidia-smi vede almeno una GPU (stessa idea della scheda macchina)."""
-    try:
-        out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            text=True, timeout=3, stderr=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return any(riga.strip() for riga in out.splitlines())
-
-
 def installa_sinergo(cartella: Path | None = None) -> None:
     """Ambiente del progetto e avvio diretto: questa modalita' non legge o scrive .env."""
     cartella = cartella or Path(__file__).resolve().parent
@@ -57,11 +45,10 @@ def installa_sinergo(cartella: Path | None = None) -> None:
     # Il Python del venv vive in Scripts su Windows e in bin su Linux.
     python = ambiente / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
     print("Installazione Sinergo…")
-    # Extra voce + chatterbox: CUDA se c'e' NVIDIA, altrimenti CPU (BOSGAME, AMD, …).
-    extra_cb = "chatterbox-cuda" if _ha_nvidia() else "chatterbox-cpu"
-    print(f"Dipendenze: uv sync --extra voce --extra {extra_cb}")
+    # Extra voce + chatterbox (codec.cpp: una sola ruota per CPU/AMD/NVIDIA).
+    print("Dipendenze: uv sync --extra voce --extra chatterbox")
     subprocess.run(
-        ["uv", "sync", "--extra", "voce", "--extra", extra_cb],
+        ["uv", "sync", "--extra", "voce", "--extra", "chatterbox"],
         cwd=cartella, check=True,
     )
     if not python.is_file():
