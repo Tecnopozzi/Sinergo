@@ -149,27 +149,47 @@ def test_prepara_senza_dipendenze_stato_errore(banco, monkeypatch):
     assert corpo["dati"]["motivo"] == "dipendenze"
 
 
-def test_chatterbox_senza_nvidia_rifiutato(banco, monkeypatch):
+def test_chatterbox_su_cpu_accettato(banco, monkeypatch, tmp_path):
+    """Chatterbox non richiede NVIDIA: su CPU parte la preparazione."""
     voce = importlib.import_module("collegato.voce.ruoli")
-    monkeypatch.setattr(voce, "_ha_nvidia", lambda: False)
-    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
-    corpo = risposta(banco, "prepara_ruolo", {
-        "ruolo": "voce_chiacchierata", "motore": "chatterbox",
-    })
-    assert corpo["ok"] is True
-    assert corpo["dati"]["stato"] == "errore"
-    assert corpo["dati"]["motivo"] == "hardware"
-
-
-def test_chatterbox_rosso_rifiutato_chiacchierata_ok_messaggi(banco, monkeypatch, tmp_path):
-    voce = importlib.import_module("collegato.voce.ruoli")
-    monkeypatch.setattr(voce, "_ha_nvidia", lambda: True)
     monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
     monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
     monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
     monkeypatch.setattr(
         voce, "misura_velocita",
-        lambda *_a, **_k: {"rtf": 0.9, "primo_audio_s": 2.0, "esito": "rosso"},
+        lambda *_a, **_k: {"rtf": 0.2, "primo_audio_s": 0.3},
+    )
+
+    def fake_thread(*, target, name, daemon):
+        class T:
+            def start(self_inner):
+                target()
+
+            def is_alive(self_inner):
+                return False
+
+        return T()
+
+    monkeypatch.setattr(voce.threading, "Thread", fake_thread)
+    corpo = risposta(banco, "prepara_ruolo", {
+        "ruolo": "voce_chiacchierata", "motore": "chatterbox",
+    })
+    assert corpo["ok"] is True
+    assert corpo["dati"]["stato"] == "in_corso"
+    assert corpo["dati"].get("motivo") != "hardware"
+    stato = voce._leggi(tmp_path)
+    assert stato["voce_chiacchierata"]["stato"] == "pronto"
+    assert "motivo" not in stato["voce_chiacchierata"]
+
+
+def test_chatterbox_rtf7_rosso_chiacchierata_verde_messaggi(banco, monkeypatch, tmp_path):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
+    monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(
+        voce, "misura_velocita",
+        lambda *_a, **_k: {"rtf": 7.0, "primo_audio_s": 0.5},
     )
 
     # Forza il percorso sincronizzato: thread gia' "finito" dopo join.
@@ -197,7 +217,7 @@ def test_chatterbox_rosso_rifiutato_chiacchierata_ok_messaggi(banco, monkeypatch
     stato = voce._leggi(tmp_path)
     assert stato["voce_chiacchierata"]["stato"] == "errore"
     assert stato["voce_chiacchierata"]["motivo"] == "lento"
-    assert stato["voce_chiacchierata"]["rtf"] == 0.9
+    assert stato["voce_chiacchierata"]["rtf"] == 7.0
 
     risultati.clear()
     corpo = risposta(banco, "prepara_ruolo", {
@@ -207,7 +227,7 @@ def test_chatterbox_rosso_rifiutato_chiacchierata_ok_messaggi(banco, monkeypatch
     assert risultati.get("ok") is True
     stato = voce._leggi(tmp_path)
     assert stato["voce_messaggi"]["stato"] == "pronto"
-    assert stato["voce_messaggi"]["rtf"] == 0.9
+    assert stato["voce_messaggi"]["rtf"] == 7.0
     assert "motivo" not in stato["voce_messaggi"]
 
 
@@ -255,17 +275,61 @@ def test_migrazione_voce_a_chiacchierata(tmp_path):
     assert stato["voce_messaggi"]["stato"] is None
 
 
-def test_prova_motore_restituisce_esito(banco, monkeypatch, tmp_path):
+def test_prova_motore_restituisce_esiti_e_soglie(banco, monkeypatch, tmp_path):
     voce = importlib.import_module("collegato.voce.ruoli")
     monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
     monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
     monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
     monkeypatch.setattr(
         voce, "misura_velocita",
-        lambda *_a, **_k: {"rtf": 0.2, "primo_audio_s": 0.4, "esito": "verde"},
+        lambda *_a, **_k: {"rtf": 7.0, "primo_audio_s": 0.4},
     )
     corpo = risposta(banco, "prova_motore", {"motore": "kokoro"})
     assert corpo["ok"] is True
-    assert corpo["dati"]["esito"] == "verde"
-    assert corpo["dati"]["rtf"] == 0.2
+    assert "esito" not in corpo["dati"]
+    assert corpo["dati"]["rtf"] == 7.0
     assert corpo["dati"]["primo_audio_s"] == 0.4
+    assert corpo["dati"]["esiti"] == {"chiacchierata": "rosso", "messaggi": "verde"}
+    assert corpo["dati"]["soglie"]["chiacchierata"]["rtf_max"] == 0.5
+    assert corpo["dati"]["soglie"]["chiacchierata"]["primo_audio_max_s"] == 1.0
+    assert corpo["dati"]["soglie"]["messaggi"]["rtf_max"] == 8.0
+
+
+def test_soglie_dal_corpo(banco, monkeypatch, tmp_path):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
+    monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(
+        voce, "misura_velocita",
+        lambda *_a, **_k: {"rtf": 3.0, "primo_audio_s": 2.0},
+    )
+    corpo = risposta(banco, "prova_motore", {
+        "motore": "kokoro",
+        "soglie": {
+            "chiacchierata": {"rtf_max": 4.0, "primo_audio_max_s": 3.0},
+            "messaggi": {"rtf_max": 2.0},
+        },
+    })
+    assert corpo["ok"] is True
+    assert corpo["dati"]["esiti"] == {"chiacchierata": "verde", "messaggi": "rosso"}
+    assert corpo["dati"]["soglie"]["chiacchierata"]["rtf_max"] == 4.0
+    assert corpo["dati"]["soglie"]["messaggi"]["rtf_max"] == 2.0
+
+
+def test_soglie_negative_o_non_numeriche_rifiutate(banco):
+    for soglie in (
+        {"chiacchierata": {"rtf_max": -1}},
+        {"chiacchierata": {"rtf_max": 0}},
+        {"messaggi": {"rtf_max": "lento"}},
+        {"chiacchierata": {"primo_audio_max_s": None}},
+        "no",
+    ):
+        corpo = risposta(banco, "prova_motore", {"motore": "kokoro", "soglie": soglie})
+        assert corpo["ok"] is False, soglie
+        assert corpo["motivo"] == "motore"
+        corpo = risposta(banco, "prepara_ruolo", {
+            "ruolo": "voce_messaggi", "motore": "chatterbox", "soglie": soglie,
+        })
+        assert corpo["ok"] is False, soglie
+        assert corpo["motivo"] == "motore"

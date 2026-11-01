@@ -21,22 +21,26 @@ Kairos può assegnare a questa macchina i ruoli **ascolto** (trascrizione),
 
 | Lavoro | Cosa fa |
 |--------|---------|
-| `prepara_ruolo` | Scarica i pesi fissati nel codice (URL + sha256), verifica l'impronta |
+| `prepara_ruolo` | Scarica i pesi fissati nel codice (URL + sha256), verifica l'impronta; soglie opzionali |
 | `ascolto` → `ascolta` | WAV 16 kHz mono → testo |
 | `voce_*` → `parla` | Testo → WAV (`per`: `chiacchierata` \| `messaggi`, default chiacchierata) |
-| `prova_motore` | Misura `rtf` e `primo_audio_s` su 3 frasi fisse → `esito` verde/rosso |
+| `prova_motore` | Misura `rtf` e `primo_audio_s` su 3 frasi fisse → `esiti` chiacchierata/messaggi |
 
 Motori: ascolto solo **parakeet**; le voci **kokoro** (fp32), **supertonic** o
-**chatterbox** (Chatterbox Multilingual / ResembleAI, solo con GPU NVIDIA).
-Senza NVIDIA, chatterbox risponde `motivo: hardware`. Dopo il download,
-chatterbox fa da solo la prova di velocità (verde = rtf < 0,5 e primo_audio_s ≤ 1,0):
-per `voce_chiacchierata` un rosso diventa `stato: errore, motivo: lento` (con i numeri);
-per `voce_messaggi` resta `pronto`. Lo stato salvato col vecchio ruolo `voce` migra a
-`voce_chiacchierata` alla lettura.
+**chatterbox** (Chatterbox Multilingual / ResembleAI, su CPU, AMD o NVIDIA).
+Dopo il download, chatterbox fa da solo la prova di velocità. Soglie dal corpo
+(`soglie`: chiacchierata `{rtf_max, primo_audio_max_s}`, messaggi `{rtf_max}`;
+default 0,5 / 1,0 / 8,0): rosso per quel ruolo → `stato: errore, motivo: lento`
+(con i numeri). Motore che non parte → `ok: false, motivo: dipendenze|motore`.
+`prova_motore` risponde `{rtf, primo_audio_s, esiti, soglie}` (niente più `esito`
+singolo). Lo stato salvato col vecchio ruolo `voce` migra a `voce_chiacchierata`
+alla lettura.
 
 Kairos sceglie solo ruolo e motore, mai un URL. I pesi stanno nella cartella dati di
 Sinergo (`~/.config/localrouter/voce/` su Linux), fuori dal codice. Dipendenze
-opzionali: `uv sync --extra voce` (CPU) e `uv sync --extra voce --extra voce-gpu`
-(chatterbox). Senza l'extra, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`.
+opzionali: `uv sync --extra voce` più **un** extra chatterbox scelto dalla scheda —
+`chatterbox-cuda` se c’è GPU NVIDIA, altrimenti `chatterbox-cpu` (torch 2.6 CPU;
+`setuptools<81` per perth). `installa.py --sinergo` lo sceglie da solo via
+`nvidia-smi`. Senza l'extra, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`.
 La scheda riporta i tre ruoli con `motore`, `stato` e, per le voci, `rtf` /
 `primo_audio_s` se misurati.

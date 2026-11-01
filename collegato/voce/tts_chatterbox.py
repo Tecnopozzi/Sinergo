@@ -1,4 +1,4 @@
-"""Chatterbox Multilingual (ResembleAI) su GPU NVIDIA, pesi dall'elenco fisso."""
+"""Chatterbox Multilingual (ResembleAI) su CPU o CUDA, pesi dall'elenco fisso."""
 from __future__ import annotations
 
 import io

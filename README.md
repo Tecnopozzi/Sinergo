@@ -28,12 +28,12 @@ Kairos can ask this machine to **listen** (speech-to-text) and **speak** (text-t
 
 | Job | Body (summary) | Result |
 |-----|----------------|--------|
-| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce_chiacchierata` \| `voce_messaggi`, `motore`: `parakeet` \| `kokoro` \| `supertonic` \| `chatterbox` | Immediate `stato`: `in_corso` / `pronto` / `errore`; downloads only the pinned file list with sha256 checks |
+| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce_chiacchierata` \| `voce_messaggi`, `motore`: `parakeet` \| `kokoro` \| `supertonic` \| `chatterbox`; optional `soglie` | Immediate `stato`: `in_corso` / `pronto` / `errore`; downloads only the pinned file list with sha256 checks |
 | `ascolta` | base64 WAV (16 kHz mono, max 3 MiB decoded) | `{testo, secondi_audio, secondi_lavoro}` |
 | `parla` | text (max 4000 chars), optional voice name, `per`: `chiacchierata` \| `messaggi` (default chiacchierata) | `{audio_b64, secondi_audio, secondi_lavoro}` |
-| `prova_motore` | `motore`: `kokoro` \| `supertonic` \| `chatterbox` | `{rtf, primo_audio_s, esito: verde\|rosso}` |
+| `prova_motore` | `motore`: `kokoro` \| `supertonic` \| `chatterbox`; optional `soglie` | `{rtf, primo_audio_s, esiti: {chiacchierata, messaggi}, soglie}` |
 
-Listening accepts only **parakeet**; speaking **kokoro** (fp32), **supertonic**, or **chatterbox** (ResembleAI Multilingual, NVIDIA GPU only — otherwise `motivo: hardware`). After download, chatterbox runs a fixed 3-sentence speed check (green = rtf < 0.5 and first audio ≤ 1.0 s): red fails `voce_chiacchierata` (`motivo: lento`) but is fine for `voce_messaggi`. Saved state with the old role `voce` migrates to `voce_chiacchierata` on read. Kairos never sends URLs or file paths. Weights live under Sinergo’s data dir (`~/.config/localrouter/voce/` on Linux), outside the repo. Optional deps: `uv sync --extra voce` and, for chatterbox, `--extra voce-gpu`. Without them, `prepara_ruolo` returns `stato: errore, motivo: dipendenze`. The machine card includes the three roles with `motore`, `stato`, and for voices `rtf` / `primo_audio_s` when measured.
+Listening accepts only **parakeet**; speaking **kokoro** (fp32), **supertonic**, or **chatterbox** (ResembleAI Multilingual on CPU, AMD, or NVIDIA). After download, chatterbox runs a fixed 3-sentence speed check. Thresholds come in the body (`soglie`: chat `{rtf_max, primo_audio_max_s}`, messages `{rtf_max}`; defaults 0.5 / 1.0 / 8.0): red for that role → `stato: errore, motivo: lento`. Engine that will not start → `ok: false, motivo: dipendenze|motore`. Saved state with the old role `voce` migrates to `voce_chiacchierata` on read. Kairos never sends URLs or file paths. Weights live under Sinergo’s data dir (`~/.config/localrouter/voce/` on Linux), outside the repo. Optional deps: `uv sync --extra voce` plus one chatterbox extra — `chatterbox-cuda` if NVIDIA is present, else `chatterbox-cpu` (`installa.py --sinergo` picks via `nvidia-smi`). Without them, `prepara_ruolo` returns `stato: errore, motivo: dipendenze`. The machine card includes the three roles with `motore`, `stato`, and for voices `rtf` / `primo_audio_s` when measured.
 
 ### Requirements
 
@@ -122,12 +122,12 @@ Kairos può chiedere a questa macchina di **ascoltare** (STT) e **parlare** (TTS
 
 | Lavoro | Corpo (sintesi) | Risultato |
 |--------|-----------------|-----------|
-| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce_chiacchierata` \| `voce_messaggi`, `motore`: `parakeet` \| `kokoro` \| `supertonic` \| `chatterbox` | Subito `stato`: `in_corso` / `pronto` / `errore`; scarica solo l’elenco fisso con verifica sha256 |
+| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce_chiacchierata` \| `voce_messaggi`, `motore`: `parakeet` \| `kokoro` \| `supertonic` \| `chatterbox`; `soglie` opzionali | Subito `stato`: `in_corso` / `pronto` / `errore`; scarica solo l’elenco fisso con verifica sha256 |
 | `ascolta` | WAV in base64 (16 kHz mono, max 3 MiB decodificati) | `{testo, secondi_audio, secondi_lavoro}` |
 | `parla` | testo (max 4000 caratteri), voce opzionale, `per`: `chiacchierata` \| `messaggi` (default chiacchierata) | `{audio_b64, secondi_audio, secondi_lavoro}` |
-| `prova_motore` | `motore`: `kokoro` \| `supertonic` \| `chatterbox` | `{rtf, primo_audio_s, esito: verde\|rosso}` |
+| `prova_motore` | `motore`: `kokoro` \| `supertonic` \| `chatterbox`; `soglie` opzionali | `{rtf, primo_audio_s, esiti: {chiacchierata, messaggi}, soglie}` |
 
-Ascolto accetta solo **parakeet**; voce **kokoro** (fp32), **supertonic** o **chatterbox** (Multilingual ResembleAI, solo GPU NVIDIA — altrimenti `motivo: hardware`). Dopo il download chatterbox misura da solo la velocità su 3 frasi fisse (verde = rtf < 0,5 e primo audio ≤ 1,0 s): rosso rifiuta `voce_chiacchierata` (`motivo: lento`) e lascia passare `voce_messaggi`. Lo stato col vecchio ruolo `voce` migra a `voce_chiacchierata` alla lettura. Kairos non manda URL né percorsi. I pesi stanno nella cartella dati di Sinergo (`~/.config/localrouter/voce/` su Linux), fuori dal codice. Extra: `uv sync --extra voce` e, per chatterbox, `--extra voce-gpu`. Senza dipendenze, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`. La scheda include i tre ruoli con `motore`, `stato` e, per le voci, `rtf` / `primo_audio_s` se misurati.
+Ascolto accetta solo **parakeet**; voce **kokoro** (fp32), **supertonic** o **chatterbox** (Multilingual ResembleAI su CPU, AMD o NVIDIA). Dopo il download chatterbox misura da solo la velocità su 3 frasi fisse. Soglie dal corpo (`soglie`: chiacchierata `{rtf_max, primo_audio_max_s}`, messaggi `{rtf_max}`; default 0,5 / 1,0 / 8,0): rosso per quel ruolo → `stato: errore, motivo: lento`. Motore che non parte → `ok: false, motivo: dipendenze|motore`. Lo stato col vecchio ruolo `voce` migra a `voce_chiacchierata` alla lettura. Kairos non manda URL né percorsi. I pesi stanno nella cartella dati di Sinergo (`~/.config/localrouter/voce/` su Linux), fuori dal codice. Extra: `uv sync --extra voce` più un extra chatterbox — `chatterbox-cuda` se c’è NVIDIA, altrimenti `chatterbox-cpu` (`installa.py --sinergo` sceglie con `nvidia-smi`). Senza dipendenze, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`. La scheda include i tre ruoli con `motore`, `stato` e, per le voci, `rtf` / `primo_audio_s` se misurati.
 
 ### Requisiti
 

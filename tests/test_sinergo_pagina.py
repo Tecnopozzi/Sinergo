@@ -129,14 +129,31 @@ def test_installa_sinergo_dipendenze_e_avvio_senza_env(tmp_path, monkeypatch):
     import installa
 
     assert hasattr(installa, "installa_sinergo"), "manca l'installazione Sinergo"
+    # uv sync crea .venv: qui lo fingiamo cosi' l'avvio puo' partire.
+    python = tmp_path / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
     chiamate = []
+    monkeypatch.setattr(installa, "_ha_nvidia", lambda: False)
     monkeypatch.setattr(installa.subprocess, "run", lambda argv, **kw: chiamate.append((argv, kw)))
     installa.installa_sinergo(tmp_path)
-    assert chiamate[0][0] == [sys.executable, "-m", "venv", str(tmp_path / ".venv")]
-    assert chiamate[1][0][-2:] == ["-r", str(tmp_path / "requirements.txt")]
-    assert chiamate[2][0][-2:] == ["-m", "collegato"]
+    assert chiamate[0][0] == ["uv", "sync", "--extra", "voce", "--extra", "chatterbox-cpu"]
+    assert chiamate[1][0] == [str(python), "-m", "collegato"]
     assert all(opzioni["cwd"] == tmp_path and opzioni["check"] for _, opzioni in chiamate)
     assert not (tmp_path / ".env").exists()
+
+
+def test_installa_sinergo_sceglie_chatterbox_cuda_se_nvidia(tmp_path, monkeypatch):
+    import installa
+
+    python = tmp_path / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    chiamate = []
+    monkeypatch.setattr(installa, "_ha_nvidia", lambda: True)
+    monkeypatch.setattr(installa.subprocess, "run", lambda argv, **kw: chiamate.append((argv, kw)))
+    installa.installa_sinergo(tmp_path)
+    assert chiamate[0][0] == ["uv", "sync", "--extra", "voce", "--extra", "chatterbox-cuda"]
 
 
 def test_installa_flag_sinergo_non_chiede_configurazione(monkeypatch):

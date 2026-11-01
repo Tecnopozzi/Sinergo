@@ -27,17 +27,23 @@ MODELLO_DI = {
     "chatterbox": "chatterbox-mtl",
 }
 TESTO_MAX = 4000
-CHIAVI_CORPO_PREPARA = frozenset({"ruolo", "motore"})
+CHIAVI_CORPO_PREPARA = frozenset({"ruolo", "motore", "soglie"})
 CHIAVI_CORPO_ASCOLTA = frozenset({"audio_b64", "lingua"})
 CHIAVI_CORPO_PARLA = frozenset({"testo", "lingua", "voce", "per"})
-CHIAVI_CORPO_PROVA = frozenset({"motore"})
+CHIAVI_CORPO_PROVA = frozenset({"motore", "soglie"})
 FRASI_PROVA = (
     "Ciao, sono Kairos e sto provando la voce.",
     "La sintesi deve rispondere in tempi brevi.",
     "Tre frasi bastano per misurare la velocita.",
 )
-RTF_VERDE = 0.5
-PRIMO_AUDIO_VERDE_S = 1.0
+SOGLIE_DEFAULT = {
+    "chiacchierata": {"rtf_max": 0.5, "primo_audio_max_s": 1.0},
+    "messaggi": {"rtf_max": 8.0},
+}
+ESITO_DI_RUOLO = {
+    "voce_chiacchierata": "chiacchierata",
+    "voce_messaggi": "messaggi",
+}
 PER_DI = {"chiacchierata": "voce_chiacchierata", "messaggi": "voce_messaggi"}
 
 _stato_lock = threading.Lock()
@@ -124,11 +130,6 @@ def ruoli_scheda(cartella: Path | None = None) -> dict:
     return out
 
 
-def _ha_nvidia() -> bool:
-    from collegato.scheda import _gpu
-    return bool(_gpu())
-
-
 def _dipendenze(motore: str) -> bool:
     try:
         import numpy  # noqa: F401
@@ -175,6 +176,64 @@ def _corpo_pulito(corpo: object, ammesse: frozenset[str]) -> dict | None:
     return corpo
 
 
+def _numero_positivo(valore: object) -> float | None:
+    if isinstance(valore, bool) or not isinstance(valore, (int, float)):
+        return None
+    numero = float(valore)
+    if numero != numero or numero <= 0:
+        return None
+    return numero
+
+
+def _leggi_soglie(corpo: dict) -> dict | None:
+    """Soglie complete (default se mancanti). None = corpo rifiutato."""
+    out = {
+        "chiacchierata": dict(SOGLIE_DEFAULT["chiacchierata"]),
+        "messaggi": dict(SOGLIE_DEFAULT["messaggi"]),
+    }
+    if "soglie" not in corpo:
+        return out
+    raw = corpo["soglie"]
+    if not isinstance(raw, dict):
+        return None
+    if any(k not in ("chiacchierata", "messaggi") for k in raw):
+        return None
+    if "chiacchierata" in raw:
+        blocco = raw["chiacchierata"]
+        if not isinstance(blocco, dict):
+            return None
+        if any(k not in ("rtf_max", "primo_audio_max_s") for k in blocco):
+            return None
+        for chiave in ("rtf_max", "primo_audio_max_s"):
+            if chiave not in blocco:
+                continue
+            numero = _numero_positivo(blocco[chiave])
+            if numero is None:
+                return None
+            out["chiacchierata"][chiave] = numero
+    if "messaggi" in raw:
+        blocco = raw["messaggi"]
+        if not isinstance(blocco, dict):
+            return None
+        if any(k not in ("rtf_max",) for k in blocco):
+            return None
+        if "rtf_max" in blocco:
+            numero = _numero_positivo(blocco["rtf_max"])
+            if numero is None:
+                return None
+            out["messaggi"]["rtf_max"] = numero
+    return out
+
+
+def _esiti(rtf: float, primo_audio_s: float, soglie: dict) -> dict[str, str]:
+    c = soglie["chiacchierata"]
+    chiacchierata = (
+        "verde" if rtf < c["rtf_max"] and primo_audio_s <= c["primo_audio_max_s"] else "rosso"
+    )
+    messaggi = "verde" if rtf < soglie["messaggi"]["rtf_max"] else "rosso"
+    return {"chiacchierata": chiacchierata, "messaggi": messaggi}
+
+
 def _wav_secondi(audio: bytes) -> float:
     with wave.open(io.BytesIO(audio), "rb") as f:
         return f.getnframes() / float(f.getframerate())
@@ -203,14 +262,8 @@ def _sintetizza(
     raise ValueError("motore sconosciuto")
 
 
-def _esito_verde(rtf: float, primo_audio_s: float) -> str:
-    if rtf < RTF_VERDE and primo_audio_s <= PRIMO_AUDIO_VERDE_S:
-        return "verde"
-    return "rosso"
-
-
 def misura_velocita(motore: str, cartella: Path | None = None) -> dict:
-    """Prova fissa a 3 frasi: restituisce rtf, primo_audio_s, esito."""
+    """Prova fissa a 3 frasi: restituisce rtf e primo_audio_s."""
     if motore not in MOTORI_VOCE:
         raise ValueError("motore")
     audio_tot = 0.0
@@ -229,19 +282,19 @@ def misura_velocita(motore: str, cartella: Path | None = None) -> dict:
     return {
         "rtf": round(rtf, 3),
         "primo_audio_s": round(primo_audio_s, 3),
-        "esito": _esito_verde(rtf, primo_audio_s),
     }
 
 
-def _dopo_chatterbox(ruolo: str, motore: str, cartella: Path | None) -> dict:
+def _dopo_chatterbox(ruolo: str, motore: str, cartella: Path | None, soglie: dict) -> dict:
     misura = misura_velocita(motore, cartella)
+    esiti = _esiti(misura["rtf"], misura["primo_audio_s"], soglie)
     nuovo = {
         "motore": motore,
         "stato": "pronto",
         "rtf": misura["rtf"],
         "primo_audio_s": misura["primo_audio_s"],
     }
-    if misura["esito"] == "rosso" and ruolo == "voce_chiacchierata":
+    if esiti[ESITO_DI_RUOLO[ruolo]] == "rosso":
         nuovo["stato"] = "errore"
         nuovo["motivo"] = "lento"
     return nuovo
@@ -254,12 +307,9 @@ def _prepara(corpo: dict, cartella: Path | None) -> dict:
     ruolo, motore = pulito.get("ruolo"), pulito.get("motore")
     if ruolo not in RUOLI or not isinstance(motore, str) or motore not in _motori_ammessi(ruolo):
         return _errore("motore")
-    if motore == "chatterbox" and not _ha_nvidia():
-        with _stato_lock:
-            stato = _leggi(cartella)
-            stato[ruolo] = {"motore": motore, "stato": "errore", "motivo": "hardware"}
-            _scrivi(cartella, stato)
-        return _ok({"ruolo": ruolo, "motore": motore, "stato": "errore", "motivo": "hardware"})
+    soglie = _leggi_soglie(pulito)
+    if soglie is None:
+        return _errore("motore")
     if not _dipendenze(motore):
         with _stato_lock:
             stato = _leggi(cartella)
@@ -298,7 +348,7 @@ def _prepara(corpo: dict, cartella: Path | None) -> dict:
                     modelli.scarica(modello, cartella_dati=cartella, progresso=lambda m: logger.info("%s", m))
                 modelli.verifica(modello, cartella)
                 if motore == "chatterbox":
-                    nuovo = _dopo_chatterbox(ruolo, motore, cartella)
+                    nuovo = _dopo_chatterbox(ruolo, motore, cartella, soglie)
                 else:
                     nuovo = {"motore": motore, "stato": "pronto"}
             except Exception as exc:  # noqa: BLE001
@@ -415,8 +465,9 @@ def _prova_motore(corpo: dict, cartella: Path | None) -> dict:
     motore = pulito.get("motore")
     if not isinstance(motore, str) or motore not in MOTORI_VOCE:
         return _errore("motore")
-    if motore == "chatterbox" and not _ha_nvidia():
-        return _errore("hardware")
+    soglie = _leggi_soglie(pulito)
+    if soglie is None:
+        return _errore("motore")
     if not _dipendenze(motore):
         return _errore("dipendenze")
     modello = MODELLO_DI[motore]
@@ -432,7 +483,12 @@ def _prova_motore(corpo: dict, cartella: Path | None) -> dict:
         except Exception as exc:  # noqa: BLE001
             logger.warning("prova_motore %s fallito: %s", motore, exc)
             return _errore("motore")
-    return _ok(misura)
+    return _ok({
+        "rtf": misura["rtf"],
+        "primo_audio_s": misura["primo_audio_s"],
+        "esiti": _esiti(misura["rtf"], misura["primo_audio_s"], soglie),
+        "soglie": soglie,
+    })
 
 
 def gestisci(tipo: str, corpo: dict, *, cartella: Path | None = None) -> dict:
