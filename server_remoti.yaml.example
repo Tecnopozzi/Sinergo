@@ -1,0 +1,8 @@
+# L'ordine determina il server predefinito e la precedenza dei modelli senza prefisso.
+# Copiare accanto al .env come server_remoti.yaml (non tracciato).
+'5060':
+  indirizzo: https://5060.example.it
+  chiave: INSERIRE_CHIAVE_5060
+'3060':
+  indirizzo: https://3060.example.it
+  chiave: INSERIRE_CHIAVE_3060

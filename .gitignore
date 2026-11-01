@@ -1,0 +1,30 @@
+# Setup venv media SUPIR (RTX 3060 12GB profile)
+.venv/
+.venv-media/
+.env
+.env.*
+!.env.example
+*.bak*
+*.bak-*
+kv_spike*.json
+logs/
+__pycache__/
+*.pyc
+*.pyo
+*.whl
+vendor/SUPIR/.git/
+models/media/*.safetensors
+models/media/*.ckpt
+models/media/hf_cache/
+data/media_jobs/
+# Whisper (trascrizione audio)
+.venv-whisper/
+models/whisper/
+data/audio_jobs/
+data/audio_test/
+# Copie usa-e-getta di server.py create per aggirare quarantene antivirus
+run_server.py
+_server_restore.tmp
+worktrees/
+server_remoti.yaml
+.server-remoti-*

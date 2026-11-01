@@ -1,0 +1,12 @@
+# Dipendenze modulo Whisper (trascrizione audio) per LocalRouter.
+# Installate in un venv dedicato .venv-whisper (Python 3.10/3.11/3.12) da
+# scripts/setup_whisper.ps1 — NON nel venv principale del server (Python 3.14).
+#
+# Profilo CPU (default): nessuna dipendenza CUDA/cuDNN, funziona su qualsiasi PC.
+# Per GPU: impostare WHISPER_DEVICE=cuda e installare cuDNN (vedi CONFIGURAZIONE.md).
+
+faster-whisper==1.1.1
+# faster-whisper 1.1.1 usa requests in utils.py ma non lo dichiara come dipendenza
+requests>=2.28
+# ctranslate2/onnxruntime: compatibilita' con NumPy 1.x
+numpy<2

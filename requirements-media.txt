@@ -1,0 +1,32 @@
+# Dipendenze venv .venv-media (SUPIR — repo Fanghua-Yu/SUPIR)
+# Installare con: scripts/setup_media.ps1
+
+# torch/torchvision/xformers: installati da setup_media.ps1 (torch 2.6+cu124, xformers 0.0.29.post3)
+numpy==1.24.2
+opencv-python==4.7.0.72
+Pillow==9.4.0
+omegaconf==2.3.0
+PyYAML==6.0
+einops==0.7.0
+timm==0.9.8
+open-clip-torch==2.17.1
+kornia==0.6.9
+pytorch-lightning==2.1.2
+transformers==4.28.1
+accelerate==0.18.0
+scikit-learn==1.2.2
+scipy==1.9.1
+tqdm==4.65.0
+safetensors
+huggingface_hub
+k-diffusion==0.1.1.post1
+diffusers==0.16.1
+openai-clip==1.0.1
+sentencepiece==0.1.98
+tokenizers==0.13.3
+fsspec==2023.4.0
+webdataset==0.2.48
+matplotlib==3.7.1
+pandas==2.0.1
+ninja==1.11.1
+urllib3==1.26.15
