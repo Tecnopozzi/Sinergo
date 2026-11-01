@@ -17,6 +17,8 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 from . import chiavi
 from .codice import AbbinamentoFallito, Richiesta
 
+FRAME_MAX = 64 * 1024  # prima dell'autenticazione resta piccolo
+
 _RETI_LAN = tuple(ipaddress.ip_network(rete) for rete in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
     "fc00::/7", "fe80::/10", "::1/128"))
@@ -102,7 +104,7 @@ async def abbina(indirizzo: str, scheda: dict, *, d: Path | None = None,
         richiesta = richiesta or Richiesta()
         await _aggiorna(aggiorna, "in_attesa", richiesta)
         try:
-            async with connetti(indirizzo, "/macchine/attesa", max_size=16 * 1024, ping_interval=30,
+            async with connetti(indirizzo, "/macchine/attesa", max_size=FRAME_MAX, ping_interval=30,
                                 ping_timeout=30, open_timeout=10) as ws:
                 await ws.send(json.dumps(richiesta.frame(scheda), ensure_ascii=False))
                 async for frame in ws:

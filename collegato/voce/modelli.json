@@ -1,0 +1,207 @@
+[
+  {
+    "nome": "config.json",
+    "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce/config.json",
+    "sha256": "666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466",
+    "bytes": 97,
+    "modello": "nemo-parakeet-tdt-0.6b-v3",
+    "cartella": "parakeet_cpu"
+  },
+  {
+    "nome": "decoder_joint-model.int8.onnx",
+    "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce/decoder_joint-model.int8.onnx",
+    "sha256": "eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70",
+    "bytes": 18202004,
+    "modello": "nemo-parakeet-tdt-0.6b-v3",
+    "cartella": "parakeet_cpu",
+    "ruolo": "modello"
+  },
+  {
+    "nome": "encoder-model.int8.onnx",
+    "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce/encoder-model.int8.onnx",
+    "sha256": "6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09",
+    "bytes": 652183999,
+    "modello": "nemo-parakeet-tdt-0.6b-v3",
+    "cartella": "parakeet_cpu",
+    "ruolo": "modello"
+  },
+  {
+    "nome": "nemo128.onnx",
+    "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce/nemo128.onnx",
+    "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
+    "bytes": 139764,
+    "modello": "nemo-parakeet-tdt-0.6b-v3",
+    "cartella": "parakeet_cpu",
+    "ruolo": "modello"
+  },
+  {
+    "nome": "vocab.txt",
+    "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce/vocab.txt",
+    "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+    "bytes": 93939,
+    "modello": "nemo-parakeet-tdt-0.6b-v3",
+    "cartella": "parakeet_cpu"
+  },
+  {
+    "nome": "kokoro-v1.0.onnx",
+    "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx",
+    "sha256": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
+    "bytes": 325505369,
+    "modello": "kokoro-v1.0",
+    "cartella": "kokoro_cpu",
+    "ruolo": "modello"
+  },
+  {
+    "nome": "voices-v1.0.bin",
+    "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin",
+    "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+    "bytes": 28214398,
+    "modello": "kokoro-v1.0",
+    "cartella": "kokoro_cpu",
+    "ruolo": "voci"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/duration_predictor.onnx",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/duration_predictor.onnx",
+    "sha256": "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db",
+    "bytes": 3700147,
+    "ruolo": "modello"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/text_encoder.onnx",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/text_encoder.onnx",
+    "sha256": "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff",
+    "bytes": 36416150,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/tts.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/tts.json",
+    "sha256": "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09",
+    "bytes": 8253,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/unicode_indexer.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/unicode_indexer.json",
+    "sha256": "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f",
+    "bytes": 277676,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/vector_estimator.onnx",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/vector_estimator.onnx",
+    "sha256": "883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c",
+    "bytes": 256534781,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "onnx/vocoder.onnx",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/onnx/vocoder.onnx",
+    "sha256": "085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba",
+    "bytes": 101424195,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/M1.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/M1.json",
+    "sha256": "e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b",
+    "bytes": 291748,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/M2.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/M2.json",
+    "sha256": "b76cbf62bac707c710cf0ae5aba5e31eea1a6339a9734bfae33ab98499534a50",
+    "bytes": 292055,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/M3.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/M3.json",
+    "sha256": "ea1ac35ccb91b0d7ecad533a2fbd0eec10c91513d8951e3b25fbba99954e159b",
+    "bytes": 290198,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/M4.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/M4.json",
+    "sha256": "ca8eefad4fcd989c9379032ff3e50738adc547eeb5e221b82593a6d7b3bac303",
+    "bytes": 291522,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/M5.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/M5.json",
+    "sha256": "dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2",
+    "bytes": 291469,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/F1.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/F1.json",
+    "sha256": "bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2",
+    "bytes": 292046,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/F2.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/F2.json",
+    "sha256": "7c722c6a72707b1a77f035d67f0d1351ba187738e06f7683e8c72b1df3477fc6",
+    "bytes": 292423,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/F3.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/F3.json",
+    "sha256": "12f6ef2573baa2defa1128069cb59f203e3ab67c92af77b42df8a0e3a2f7c6ab",
+    "bytes": 290794,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/F4.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/F4.json",
+    "sha256": "c2fa764c1225a76dfc3e2c73e8aa4f70d9ee48793860eb34c295fff01c2e032b",
+    "bytes": 291808,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "supertonic-3",
+    "cartella": "supertonic-3",
+    "nome": "voice_styles/F5.json",
+    "url": "https://huggingface.co/Supertone/supertonic-3/resolve/724fb5abbf5502583fb520898d45929e62f02c0b/voice_styles/F5.json",
+    "sha256": "45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d",
+    "bytes": 291479,
+    "ruolo": "risorsa"
+  }
+]

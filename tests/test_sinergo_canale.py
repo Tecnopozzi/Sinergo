@@ -189,7 +189,7 @@ def test_solo_lettura_usa_fonti_router_e_null_per_misure_ignote(banco, monkeypat
              "/metrics/system": {"memory": {"used_bytes": 2 * 2**30},
                                  "gpu": {"available": True, "gpus": [{"vram_used_mb": 1024}]}}}
     monkeypatch.setattr(canale, "_leggi_router", lambda percorso: fonti[percorso])
-    monkeypatch.setattr(canale, "scheda", lambda: {"nome": "pc-test", "ram_gb": 32.0})
+    monkeypatch.setattr(canale, "scheda", lambda **_: {"nome": "pc-test", "ram_gb": 32.0})
     def dati(tipo):
         return json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, tipo, {}))))["corpo"]["dati"]
     assert dati("scheda")["nome"] == "pc-test"

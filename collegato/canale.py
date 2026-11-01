@@ -20,8 +20,9 @@ from . import chiavi, firma
 from .scheda import scheda
 
 logger = logging.getLogger("sinergo.canale")
-FRAME_MAX = 64 * 1024
-LAVORI = ("scheda", "salute", "modelli", "misura")
+FRAME_MAX = 6 * 1024 * 1024  # dopo autenticazione: audio base64 (~4/3)
+LAVORI = ("scheda", "salute", "modelli", "misura", "prepara_ruolo", "ascolta", "parla")
+LAVORI_VOCE = frozenset({"prepara_ruolo", "ascolta", "parla"})
 
 
 def _leggi_router(percorso: str) -> dict | None:
@@ -114,7 +115,7 @@ class Cliente:
 
     def _lettura(self, tipo: str) -> dict:
         if tipo == "scheda":
-            return scheda()
+            return scheda(cartella=self._cartella)
         if tipo == "salute":
             stato = _leggi_router("/health") or {}
             return {"stato": stato.get("status")}
@@ -166,6 +167,10 @@ class Cliente:
         self._registro(msg, esito, time.monotonic() - inizio)
         return risposta
 
+    def _voce(self, tipo: str, corpo: dict) -> dict:
+        from .voce import gestisci
+        return gestisci(tipo, corpo, cartella=self._cartella)
+
     def _risposta(self, msg: dict) -> str | None:
         tipo = msg["tipo"]
         if tipo == "ciao_ok":
@@ -174,6 +179,8 @@ class Cliente:
             return json.dumps(firma.firma(self._privata, "pong", {}))
         if tipo == "comando":
             risposta = self._comando(msg)
+        elif tipo in LAVORI_VOCE:
+            risposta = self._voce(tipo, msg.get("corpo") or {})
         elif tipo in LAVORI:
             risposta = {"ok": True, "dati": self._lettura(tipo)}
         else:

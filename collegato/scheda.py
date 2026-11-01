@@ -40,8 +40,10 @@ def _gpu() -> list[dict]:
     return gpu
 
 
-def scheda() -> dict:
+def scheda(cartella: Path | None = None) -> dict:
+    from .voce import ruoli_scheda
     return {"nome": platform.node() or "computer", "cpu": platform.processor() or platform.machine(),
             "core": os.cpu_count(), "ram_gb": _ram_gb(), "gpu": _gpu(),
             "disco_gb": round(shutil.disk_usage(Path.home()).total / 2**30),
-            "os": f"{platform.system()} {platform.release()}"}
+            "os": f"{platform.system()} {platform.release()}",
+            "ruoli": ruoli_scheda(cartella)}

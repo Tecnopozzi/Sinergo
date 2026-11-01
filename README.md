@@ -22,6 +22,18 @@ You install Sinergo on a PC (Windows or Linux). It shows a short pairing code. Y
 - It does **not** grant Kairos administrator rights. Programs run with the same permissions as the user who started Sinergo.
 - It is **not** only a “remote desktop”: it exposes LocalRouter APIs (chat, models, optional OCR/media/whisper) and a signed command channel under your control.
 
+### Roles: listening and speaking
+
+Kairos can ask this machine to **listen** (speech-to-text) and **speak** (text-to-speech) on the signed channel:
+
+| Job | Body (summary) | Result |
+|-----|----------------|--------|
+| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce`, `motore`: `parakeet` \| `kokoro` \| `supertonic` | Immediate `stato`: `in_corso` / `pronto` / `errore`; downloads only the pinned file list with sha256 checks |
+| `ascolta` | base64 WAV (16 kHz mono, max 3 MiB decoded) | `{testo, secondi_audio, secondi_lavoro}` |
+| `parla` | text (max 4000 chars), optional voice name | `{audio_b64, secondi_audio, secondi_lavoro}` |
+
+Listening accepts only **parakeet**; speaking **kokoro** (fp32) or **supertonic**. Kairos never sends URLs or file paths. Weights live under Sinergo’s data dir (`~/.config/localrouter/voce/` on Linux), outside the repo. Optional deps: `uv sync --extra voce`. Without them, `prepara_ruolo` returns `stato: errore, motivo: dipendenze`. The machine card includes `ruoli.ascolto` / `ruoli.voce`.
+
 ### Requirements
 
 | | |
@@ -102,6 +114,18 @@ Lo installi sul PC da collegare. Mostra un codice. Scrivi il codice in Kairos. D
 - Non chiede port forwarding né un IP pubblico sul PC di Sinergo.
 - Non dà a Kairos poteri di amministratore: i programmi girano con i permessi dell’utente che ha avviato Sinergo.
 - Non è solo un desktop remoto: espone le API di LocalRouter e un canale comandi firmato sotto il tuo controllo.
+
+### Ruoli: ascolto e voce
+
+Kairos può chiedere a questa macchina di **ascoltare** (STT) e **parlare** (TTS) sul canale firmato:
+
+| Lavoro | Corpo (sintesi) | Risultato |
+|--------|-----------------|-----------|
+| `prepara_ruolo` | `ruolo`: `ascolto` \| `voce`, `motore`: `parakeet` \| `kokoro` \| `supertonic` | Subito `stato`: `in_corso` / `pronto` / `errore`; scarica solo l’elenco fisso con verifica sha256 |
+| `ascolta` | WAV in base64 (16 kHz mono, max 3 MiB decodificati) | `{testo, secondi_audio, secondi_lavoro}` |
+| `parla` | testo (max 4000 caratteri), voce opzionale | `{audio_b64, secondi_audio, secondi_lavoro}` |
+
+Ascolto accetta solo **parakeet**; voce **kokoro** (fp32) o **supertonic**. Kairos non manda URL né percorsi. I pesi stanno nella cartella dati di Sinergo (`~/.config/localrouter/voce/` su Linux), fuori dal codice. Extra opzionale: `uv sync --extra voce`. Senza dipendenze, `prepara_ruolo` risponde `stato: errore, motivo: dipendenze`. La scheda include `ruoli.ascolto` / `ruoli.voce`.
 
 ### Requisiti
 
