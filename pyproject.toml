@@ -27,6 +27,9 @@ voce = [
     "supertonic==1.3.1",
     "av>=16",
 ]
+voce-gpu = [
+    "chatterbox-tts==0.1.7",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
@@ -41,3 +44,6 @@ packages = ["collegato", "decisori", "media", "sinergo", "transcribe"]
 
 [tool.uv]
 package = false
+# chatterbox-tts pinna numpy 1.x; kokoro-onnx vuole numpy 2.x. In pratica chatterbox
+# gira con numpy 2 (stesso vincolo gia' usato dal resto dell'extra voce).
+override-dependencies = ["numpy>=2.0.2"]

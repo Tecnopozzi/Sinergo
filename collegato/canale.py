@@ -21,8 +21,8 @@ from .scheda import scheda
 
 logger = logging.getLogger("sinergo.canale")
 FRAME_MAX = 6 * 1024 * 1024  # dopo autenticazione: audio base64 (~4/3)
-LAVORI = ("scheda", "salute", "modelli", "misura", "prepara_ruolo", "ascolta", "parla")
-LAVORI_VOCE = frozenset({"prepara_ruolo", "ascolta", "parla"})
+LAVORI = ("scheda", "salute", "modelli", "misura", "prepara_ruolo", "ascolta", "parla", "prova_motore")
+LAVORI_VOCE = frozenset({"prepara_ruolo", "ascolta", "parla", "prova_motore"})
 
 
 def _leggi_router(percorso: str) -> dict | None:

@@ -203,5 +203,59 @@
     "sha256": "45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d",
     "bytes": 291479,
     "ruolo": "risorsa"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "ve.pt",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/ve.pt",
+    "sha256": "4b16d836bc598509860f6fa068165a8bb5e9ac84f05582dfcf278a5a372879f1",
+    "bytes": 5698626,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "t3_mtl23ls_v2.safetensors",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/t3_mtl23ls_v2.safetensors",
+    "sha256": "b1237586127ce98e7800a68e49938eb5092846862aabcb6e17b2fda7889a6c75",
+    "bytes": 2143989752,
+    "ruolo": "modello"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "s3gen.pt",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/s3gen.pt",
+    "sha256": "9b9ff07e60b20c136e2b1b3d7563a24604e8d2c4c267888d1ee929dd0151d2a3",
+    "bytes": 1057165844,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "grapheme_mtl_merged_expanded_v1.json",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/grapheme_mtl_merged_expanded_v1.json",
+    "sha256": "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf",
+    "bytes": 69989,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "conds.pt",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/conds.pt",
+    "sha256": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+    "bytes": 107374,
+    "ruolo": "risorsa"
+  },
+  {
+    "modello": "chatterbox-mtl",
+    "cartella": "chatterbox_mtl",
+    "nome": "Cangjie5_TC.json",
+    "url": "https://huggingface.co/ResembleAI/chatterbox/resolve/5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18/Cangjie5_TC.json",
+    "sha256": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+    "bytes": 1920163,
+    "ruolo": "risorsa"
   }
 ]

@@ -1,4 +1,4 @@
-"""Guardie dei lavori voce remota: ruolo, dimensione, motore, sha256, frame pre-auth."""
+"""Guardie dei lavori voce remota: ruoli, dimensioni, motori, sha256, frame, due voci."""
 from __future__ import annotations
 
 import base64
@@ -64,13 +64,13 @@ def test_parla_senza_ruolo_pronto_motivo(banco):
     assert corpo["motivo"] == "ruolo_non_pronto"
 
 
-def test_audio_oltre_3_mib_troppo_grande(banco, monkeypatch, tmp_path):
+def test_audio_oltre_3_mib_troppo_grande(banco, monkeypatch):
     voce = importlib.import_module("collegato.voce.ruoli")
     monkeypatch.setattr(voce, "_leggi", lambda cartella: {
         "ascolto": {"motore": "parakeet", "stato": "pronto"},
-        "voce": {"motore": None, "stato": None},
+        "voce_chiacchierata": {"motore": None, "stato": None},
+        "voce_messaggi": {"motore": None, "stato": None},
     })
-    # Base64 di payload > 3 MiB (decodificato)
     grosso = b"RIFF" + b"\x00" * (3 * 1024 * 1024 + 1)
     corpo = risposta(banco, "ascolta", {"audio_b64": base64.b64encode(grosso).decode(), "lingua": "it"})
     assert corpo["ok"] is False
@@ -94,8 +94,6 @@ def test_url_nel_corpo_rifiutato(banco):
 
 def test_sha256_sbagliato_non_lascia_file(tmp_path, monkeypatch):
     modelli = importlib.import_module("collegato.voce.modelli")
-    voce = importlib.import_module("collegato.voce.ruoli")
-    # Un solo file piccolo del manifesto, scaricato verso tmp_path
     entry = next(f for f in modelli.manifesto() if f["nome"] == "config.json")
     fake = {**entry, "sha256": "00" * 32, "bytes": 4, "url": "http://127.0.0.1/config.json"}
 
@@ -132,13 +130,14 @@ def test_frame_pre_autenticazione_oltre_64kib_rifiutato():
     assert canale.FRAME_MAX == 6 * 1024 * 1024
 
 
-def test_scheda_espone_ruoli(banco):
+def test_scheda_espone_tre_ruoli(banco):
     cliente, firma, _, _, sk_k, *_ = banco
     msg = firma.firma(sk_k, "scheda", {})
     dati = json.loads(cliente.ricevi(json.dumps(msg)))["corpo"]["dati"]
     assert "ruoli" in dati
-    assert set(dati["ruoli"]) == {"ascolto", "voce"}
+    assert set(dati["ruoli"]) == {"ascolto", "voce_chiacchierata", "voce_messaggi"}
     assert set(dati["ruoli"]["ascolto"]) >= {"motore", "stato"}
+    assert set(dati["ruoli"]["voce_chiacchierata"]) >= {"motore", "stato"}
 
 
 def test_prepara_senza_dipendenze_stato_errore(banco, monkeypatch):
@@ -148,3 +147,125 @@ def test_prepara_senza_dipendenze_stato_errore(banco, monkeypatch):
     assert corpo["ok"] is True
     assert corpo["dati"]["stato"] == "errore"
     assert corpo["dati"]["motivo"] == "dipendenze"
+
+
+def test_chatterbox_senza_nvidia_rifiutato(banco, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_ha_nvidia", lambda: False)
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    corpo = risposta(banco, "prepara_ruolo", {
+        "ruolo": "voce_chiacchierata", "motore": "chatterbox",
+    })
+    assert corpo["ok"] is True
+    assert corpo["dati"]["stato"] == "errore"
+    assert corpo["dati"]["motivo"] == "hardware"
+
+
+def test_chatterbox_rosso_rifiutato_chiacchierata_ok_messaggi(banco, monkeypatch, tmp_path):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_ha_nvidia", lambda: True)
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
+    monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(
+        voce, "misura_velocita",
+        lambda *_a, **_k: {"rtf": 0.9, "primo_audio_s": 2.0, "esito": "rosso"},
+    )
+
+    # Forza il percorso sincronizzato: thread gia' "finito" dopo join.
+    risultati = {}
+
+    def fake_thread(*, target, name, daemon):
+        class T:
+            def start(self_inner):
+                target()
+                risultati["ok"] = True
+
+            def is_alive(self_inner):
+                return False
+
+        return T()
+
+    monkeypatch.setattr(voce.threading, "Thread", fake_thread)
+
+    corpo = risposta(banco, "prepara_ruolo", {
+        "ruolo": "voce_chiacchierata", "motore": "chatterbox",
+    })
+    assert corpo["ok"] is True
+    assert corpo["dati"]["stato"] == "in_corso"
+    assert risultati.get("ok") is True
+    stato = voce._leggi(tmp_path)
+    assert stato["voce_chiacchierata"]["stato"] == "errore"
+    assert stato["voce_chiacchierata"]["motivo"] == "lento"
+    assert stato["voce_chiacchierata"]["rtf"] == 0.9
+
+    risultati.clear()
+    corpo = risposta(banco, "prepara_ruolo", {
+        "ruolo": "voce_messaggi", "motore": "chatterbox",
+    })
+    assert corpo["ok"] is True
+    assert risultati.get("ok") is True
+    stato = voce._leggi(tmp_path)
+    assert stato["voce_messaggi"]["stato"] == "pronto"
+    assert stato["voce_messaggi"]["rtf"] == 0.9
+    assert "motivo" not in stato["voce_messaggi"]
+
+
+def test_parla_per_sceglie_motore(banco, monkeypatch):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_leggi", lambda cartella: {
+        "ascolto": {"motore": None, "stato": None},
+        "voce_chiacchierata": {"motore": "kokoro", "stato": "pronto"},
+        "voce_messaggi": {"motore": "supertonic", "stato": "pronto"},
+    })
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    chiamate = []
+
+    def fake_sint(motore, testo, **kwargs):
+        chiamate.append(motore)
+        return wav_silenzio(0.05)
+
+    monkeypatch.setattr(voce, "_sintetizza", fake_sint)
+
+    corpo = risposta(banco, "parla", {"testo": "Ciao", "lingua": "it", "per": "chiacchierata"})
+    assert corpo["ok"] is True
+    assert chiamate == ["kokoro"]
+
+    corpo = risposta(banco, "parla", {"testo": "Ciao", "lingua": "it", "per": "messaggi"})
+    assert corpo["ok"] is True
+    assert chiamate == ["kokoro", "supertonic"]
+
+    corpo = risposta(banco, "parla", {"testo": "Ciao", "lingua": "it"})
+    assert corpo["ok"] is True
+    assert chiamate[-1] == "kokoro"
+
+
+def test_migrazione_voce_a_chiacchierata(tmp_path):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    path = voce._file_stato(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "ascolto": {"motore": "parakeet", "stato": "pronto"},
+        "voce": {"motore": "kokoro", "stato": "pronto"},
+    }), encoding="utf-8")
+    stato = voce._leggi(tmp_path)
+    assert "voce" not in stato
+    assert stato["voce_chiacchierata"]["motore"] == "kokoro"
+    assert stato["voce_chiacchierata"]["stato"] == "pronto"
+    assert stato["voce_messaggi"]["stato"] is None
+
+
+def test_prova_motore_restituisce_esito(banco, monkeypatch, tmp_path):
+    voce = importlib.import_module("collegato.voce.ruoli")
+    monkeypatch.setattr(voce, "_dipendenze", lambda _m: True)
+    monkeypatch.setattr(voce.modelli, "pronto", lambda *_a, **_k: True)
+    monkeypatch.setattr(voce.modelli, "verifica", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(
+        voce, "misura_velocita",
+        lambda *_a, **_k: {"rtf": 0.2, "primo_audio_s": 0.4, "esito": "verde"},
+    )
+    corpo = risposta(banco, "prova_motore", {"motore": "kokoro"})
+    assert corpo["ok"] is True
+    assert corpo["dati"]["esito"] == "verde"
+    assert corpo["dati"]["rtf"] == 0.2
+    assert corpo["dati"]["primo_audio_s"] == 0.4
