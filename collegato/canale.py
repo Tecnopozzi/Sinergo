@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timezone
 import json
 import logging
@@ -21,7 +22,14 @@ from .scheda import scheda
 
 logger = logging.getLogger("sinergo.canale")
 FRAME_MAX = 6 * 1024 * 1024  # dopo autenticazione: audio base64 (~4/3)
-LAVORI = ("scheda", "salute", "modelli", "misura", "prepara_ruolo", "ascolta", "parla", "prova_motore")
+# Tetti immagini del lavoro `rispondi` (singola come AUDIO_MAX di ascolta; totale accanto).
+IMAGE_MAX = 3 * 1024 * 1024
+IMAGE_TOTAL_MAX = 4 * 1024 * 1024
+IMAGE_N_MAX = 4
+RISPONDI_MAX_TOKENS = 8192
+RISPONDI_TIMEOUT_S = 180
+LAVORI = ("scheda", "salute", "modelli", "misura", "prepara_ruolo", "ascolta", "parla", "prova_motore",
+          "rispondi")
 LAVORI_VOCE = frozenset({"prepara_ruolo", "ascolta", "parla", "prova_motore"})
 
 
@@ -40,6 +48,148 @@ def _leggi_router(percorso: str) -> dict | None:
         return dati if isinstance(dati, dict) else None
     except (OSError, ValueError, RecursionError, httpx.HTTPError):
         return None
+
+
+def _modelli_esposti() -> list[str] | None:
+    """Stesso elenco del lavoro `modelli`; None se il gateway non risponde."""
+    catalogo = _leggi_router("/v1/models")
+    elenco = catalogo.get("data") if catalogo else None
+    if not isinstance(elenco, list):
+        return None
+    return [m["id"] for m in elenco if isinstance(m, dict) and isinstance(m.get("id"), str)]
+
+
+def _mime_immagine(grezzo: bytes) -> str:
+    if grezzo.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if grezzo[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if grezzo[:4] == b"RIFF" and grezzo[8:12] == b"WEBP":
+        return "image/webp"
+    if grezzo[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return "image/png"
+
+
+def _decodifica_immagine(valore: str) -> bytes | None:
+    """Accetta base64 grezzo o data-URL; None se malformato."""
+    if not isinstance(valore, str) or not valore:
+        return None
+    payload = valore
+    if valore.startswith("data:") and ";base64," in valore:
+        payload = valore.split(";base64,", 1)[1]
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (ValueError, TypeError):
+        return None
+
+
+def _messaggi_con_immagini(messaggi: list[dict], immagini_b64: list[str]) -> list[dict]:
+    """Copia i messaggi OpenAI e attacca le immagini all'ultimo turno user."""
+    uscita = [dict(m) for m in messaggi]
+    pezzi = []
+    for grezzo_b64 in immagini_b64:
+        grezzo = _decodifica_immagine(grezzo_b64)
+        if grezzo is None:
+            continue
+        mime = _mime_immagine(grezzo)
+        url = f"data:{mime};base64,{base64.b64encode(grezzo).decode('ascii')}"
+        pezzi.append({"type": "image_url", "image_url": {"url": url}})
+    if not pezzi:
+        return uscita
+    for i in range(len(uscita) - 1, -1, -1):
+        if uscita[i].get("role") == "user":
+            contenuto = uscita[i].get("content", "")
+            if isinstance(contenuto, str):
+                parti = [{"type": "text", "text": contenuto}] if contenuto else []
+            elif isinstance(contenuto, list):
+                parti = list(contenuto)
+            else:
+                parti = []
+            uscita[i] = {**uscita[i], "content": parti + pezzi}
+            return uscita
+    uscita.append({"role": "user", "content": pezzi})
+    return uscita
+
+
+def _chat_locale(modello: str, messaggi: list[dict]) -> dict | None:
+    """POST /v1/chat/completions sul gateway locale (stesso di modelli/salute)."""
+    try:
+        porta = int(os.environ.get("PORT", "8088"))
+        if not 1 <= porta <= 65535:
+            return None
+        chiave = os.environ.get("API_KEY", "")
+        headers = {"Authorization": f"Bearer {chiave}"} if chiave else {}
+        corpo = {
+            "model": modello,
+            "messages": messaggi,
+            "max_tokens": RISPONDI_MAX_TOKENS,
+            "stream": False,
+            # Senza questo un modello che ragiona (qwen3.6) spende max_tokens in
+            # reasoning_content e torna content vuoto.
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        with httpx.Client(timeout=RISPONDI_TIMEOUT_S, trust_env=False, follow_redirects=False) as client:
+            risposta = client.post(
+                f"http://127.0.0.1:{porta}/v1/chat/completions", headers=headers, json=corpo,
+            )
+            risposta.raise_for_status()
+            dati = risposta.json()
+        return dati if isinstance(dati, dict) else None
+    except (OSError, ValueError, RecursionError, httpx.HTTPError):
+        return None
+
+
+def _esegui_rispondi(corpo: dict) -> dict:
+    """Lavoro `rispondi`: chat locale con immagini (occhio di Kairos)."""
+    if not isinstance(corpo, dict):
+        return {"ok": False, "errore": "corpo malformato"}
+    messaggi = corpo.get("messaggi")
+    opzioni = corpo.get("opzioni") or {}
+    if not isinstance(messaggi, list) or not all(isinstance(m, dict) for m in messaggi):
+        return {"ok": False, "errore": "messaggi malformati"}
+    if not isinstance(opzioni, dict):
+        return {"ok": False, "errore": "opzioni malformate"}
+    modello = opzioni.get("modello")
+    if not isinstance(modello, str) or not modello:
+        return {"ok": False, "errore": "modello non presente"}
+    immagini = opzioni.get("images") or []
+    if not isinstance(immagini, list) or not all(isinstance(i, str) for i in immagini):
+        return {"ok": False, "errore": "immagini malformate"}
+    if len(immagini) > IMAGE_N_MAX:
+        return {"ok": False, "errore": "troppe immagini"}
+
+    totale = 0
+    for grezzo_b64 in immagini:
+        grezzo = _decodifica_immagine(grezzo_b64)
+        if grezzo is None:
+            return {"ok": False, "errore": "immagine malformata"}
+        if len(grezzo) > IMAGE_MAX:
+            return {"ok": False, "errore": "immagine troppo grande"}
+        totale += len(grezzo)
+        if totale > IMAGE_TOTAL_MAX:
+            return {"ok": False, "errore": "immagine troppo grande"}
+
+    esposti = _modelli_esposti()
+    if esposti is None:
+        return {"ok": False, "errore": "modello non risponde"}
+    if modello not in esposti:
+        return {"ok": False, "errore": "modello non presente"}
+
+    payload = _messaggi_con_immagini(messaggi, immagini)
+    dati = _chat_locale(modello, payload)
+    if dati is None:
+        return {"ok": False, "errore": "modello non risponde"}
+    scelte = dati.get("choices")
+    if not isinstance(scelte, list) or not scelte:
+        return {"ok": False, "errore": "modello non risponde"}
+    messaggio = scelte[0].get("message") if isinstance(scelte[0], dict) else None
+    if not isinstance(messaggio, dict):
+        return {"ok": False, "errore": "modello non risponde"}
+    testo = messaggio.get("content")
+    if not isinstance(testo, str):
+        return {"ok": False, "errore": "modello non risponde"}
+    return {"ok": True, "dati": {"testo": testo}}
 
 
 def _numero(valore) -> float | None:
@@ -179,6 +329,8 @@ class Cliente:
             return json.dumps(firma.firma(self._privata, "pong", {}))
         if tipo == "comando":
             risposta = self._comando(msg)
+        elif tipo == "rispondi":
+            risposta = _esegui_rispondi(msg.get("corpo") or {})
         elif tipo in LAVORI_VOCE:
             risposta = self._voce(tipo, msg.get("corpo") or {})
         elif tipo in LAVORI:

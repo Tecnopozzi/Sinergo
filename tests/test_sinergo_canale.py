@@ -342,3 +342,135 @@ async def test_revoca_locale_chiude_socket_senza_frame_nuovi(moduli, monkeypatch
             if not task.done():
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
+
+
+# --- lavoro rispondi (occhio / chat locale con immagini) ---
+
+def _b64(n: int = 16) -> str:
+    import base64
+    return base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"x" * max(0, n - 8)).decode("ascii")
+
+
+def _finto_catalogo_e_chat(canale, monkeypatch):
+    """Catalogo finto + chat che «riesce»: senza tetto il test vedrebbe ok=True."""
+    monkeypatch.setattr(canale, "_leggi_router", lambda percorso: {"data": [{"id": "glm-ocr"}]})
+    monkeypatch.setattr(
+        canale, "_chat_locale",
+        lambda modello, messaggi: {"choices": [{"message": {"content": "non dovevo arrivare qui"}}]},
+    )
+
+
+def test_rispondi_in_lavori(moduli):
+    canale, _ = moduli
+    assert "rispondi" in canale.LAVORI
+
+
+def test_rispondi_modello_non_esposto(banco, monkeypatch):
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    _finto_catalogo_e_chat(canale, monkeypatch)
+    corpo = {"messaggi": [{"role": "user", "content": "ciao"}],
+             "opzioni": {"modello": "modello-inesistente", "images": []}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is False
+    assert risposta["errore"] == "modello non presente"
+
+
+def test_rispondi_immagine_oltre_tetto(banco, monkeypatch):
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    _finto_catalogo_e_chat(canale, monkeypatch)
+    import base64
+    # Sopra IMAGE_MAX ma sotto IMAGE_TOTAL_MAX: solo il tetto singola lo ferma.
+    assert canale.IMAGE_MAX + 1 <= canale.IMAGE_TOTAL_MAX
+    grosso = base64.b64encode(b"\x00" * (canale.IMAGE_MAX + 1)).decode("ascii")
+    corpo = {"messaggi": [{"role": "user", "content": "leggi"}],
+             "opzioni": {"modello": "glm-ocr", "images": [grosso]}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is False
+    assert risposta["errore"] == "immagine troppo grande"
+
+
+def test_rispondi_troppe_immagini(banco, monkeypatch):
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    _finto_catalogo_e_chat(canale, monkeypatch)
+    immagini = [_b64(32) for _ in range(canale.IMAGE_N_MAX + 1)]
+    corpo = {"messaggi": [{"role": "user", "content": "leggi"}],
+             "opzioni": {"modello": "glm-ocr", "images": immagini}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is False
+    assert risposta["errore"] == "troppe immagini"
+
+
+def test_rispondi_totale_oltre_tetto(banco, monkeypatch):
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    _finto_catalogo_e_chat(canale, monkeypatch)
+    import base64
+    # Due pezzi sotto IMAGE_MAX ciascuno, sopra IMAGE_TOTAL_MAX insieme.
+    mezzo = canale.IMAGE_TOTAL_MAX // 2 + 1
+    assert mezzo <= canale.IMAGE_MAX
+    pezzo = base64.b64encode(b"\x00" * mezzo).decode("ascii")
+    corpo = {"messaggi": [{"role": "user", "content": "leggi"}],
+             "opzioni": {"modello": "glm-ocr", "images": [pezzo, pezzo]}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is False
+    assert risposta["errore"] == "immagine troppo grande"
+
+
+def test_rispondi_caso_buono_gateway_finto(banco, monkeypatch):
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    monkeypatch.setattr(canale, "_leggi_router", lambda percorso: {"data": [{"id": "glm-ocr"}]})
+
+    def chat_finta(modello, messaggi):
+        assert modello == "glm-ocr"
+        assert any(
+            isinstance(m.get("content"), list)
+            and any(p.get("type") == "image_url" for p in m["content"] if isinstance(p, dict))
+            for m in messaggi
+        )
+        return {"choices": [{"message": {"role": "assistant", "content": "FATTURA 123"}}]}
+
+    monkeypatch.setattr(canale, "_chat_locale", chat_finta)
+    corpo = {"messaggi": [{"role": "user", "content": "che testo vedi?"}],
+             "opzioni": {"modello": "glm-ocr", "images": [_b64(64)]}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is True
+    assert risposta["dati"]["testo"] == "FATTURA 123"
+
+
+def test_rispondi_spegne_pensiero_nel_corpo(banco, monkeypatch):
+    """Il POST al gateway deve portare enable_thinking=false (corpo inviato, non sorgente)."""
+    cliente, firma, _, _, sk_k, *_ = banco
+    canale = importlib.import_module("collegato.canale")
+    monkeypatch.setattr(canale, "_leggi_router", lambda percorso: {"data": [{"id": "glm-ocr"}]})
+    inviati: list[dict] = []
+
+    def post_finto(url, headers=None, json=None):
+        inviati.append(json)
+        class _R:
+            def raise_for_status(self):
+                return None
+            def json(self):
+                return {"choices": [{"message": {"content": "ok"}}]}
+        return _R()
+
+    class _ClientFinto:
+        def __init__(self, *a, **k):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def post(self, url, headers=None, json=None):
+            return post_finto(url, headers=headers, json=json)
+
+    monkeypatch.setattr(canale.httpx, "Client", _ClientFinto)
+    corpo = {"messaggi": [{"role": "user", "content": "ciao"}],
+             "opzioni": {"modello": "glm-ocr", "images": []}}
+    risposta = json.loads(cliente.ricevi(json.dumps(firma.firma(sk_k, "rispondi", corpo))))["corpo"]
+    assert risposta["ok"] is True
+    assert len(inviati) == 1
+    assert inviati[0]["chat_template_kwargs"] == {"enable_thinking": False}
