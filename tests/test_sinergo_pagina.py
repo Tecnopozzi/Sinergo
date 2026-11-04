@@ -134,12 +134,15 @@ def test_installa_sinergo_dipendenze_e_avvio_senza_env(tmp_path, monkeypatch):
     python.parent.mkdir(parents=True)
     python.write_text("", encoding="utf-8")
     chiamate = []
+    runtime = []
     monkeypatch.setattr(installa.subprocess, "run", lambda argv, **kw: chiamate.append((argv, kw)))
+    monkeypatch.setattr(installa, "avvia_runtime_sinergo", lambda c: runtime.append(c))
     installa.installa_sinergo(tmp_path)
     assert chiamate[0][0] == ["uv", "sync", "--extra", "voce", "--extra", "chatterbox"]
-    assert chiamate[1][0] == [str(python), "-m", "collegato"]
-    assert all(opzioni["cwd"] == tmp_path and opzioni["check"] for _, opzioni in chiamate)
-    assert not (tmp_path / ".env").exists()
+    assert chiamate[0][1]["cwd"] == tmp_path and chiamate[0][1]["check"]
+    assert runtime == [tmp_path]
+    letto = installa.leggi_env(tmp_path / ".env")
+    assert letto.get("API_KEY") and letto.get("LOCALROUTER_MODO") == "sinergo"
     assert not hasattr(installa, "_ha_nvidia")
 
 

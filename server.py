@@ -4546,9 +4546,11 @@ def main() -> None:
         cliente.main()
         return
 
+    # Sinergo: solo loopback (SINERGO_BIND_HOST), niente esposizione di rete.
+    host = config.SINERGO_BIND_HOST if config.MODO == "sinergo" else config.HOST
     uvicorn.run(
         "server:app",
-        host=config.HOST,
+        host=host,
         port=config.PORT,
         reload=False,
         log_level="info",

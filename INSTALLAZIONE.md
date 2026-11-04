@@ -40,6 +40,22 @@ python server.py                     # legge LOCALROUTER_MODO=client dal .env
   (Cloudflare blocca quello di python), streaming compreso. Nessuna logica di
   modelli: è un tubo.
 
+**Sinergo** (computer da collegare a Kairos — gateway locale + canale firmato):
+
+```bash
+python installa.py --sinergo
+```
+
+- Dipendenze voce/chatterbox, `.env` con chiave (generata se manca, **non** stampata),
+  `LOCALROUTER_MODO=sinergo`, host di ascolto **solo** `127.0.0.1` (`SINERGO_BIND_HOST`).
+- Avvia il gateway se `/health` su `127.0.0.1:<PORT>` non risponde; altrimenti riusa
+  un LocalRouter gia' acceso. Poi avvia il collegato.
+- **Una sola** voce Run Windows (`Sinergo` → `autostart.vbs sinergo` → `Sinergo.bat`).
+- **Niente** cloudflared / tunnel. Chiave obbligatoria anche da loopback (come il server).
+- Non installa llama-swap: come `--server`, i backend modelli restano a parte.
+
+Dettaglio: `SINERGO.md` e `sinergo/README.md`.
+
 ---
 
 ## 1. Ordine consigliato

@@ -9,7 +9,39 @@ Avvio rapido:
 python installa.py --sinergo
 ```
 
-Su Windows, dopo la prima installazione: `Sinergo.bat`.
+Cosa fa `--sinergo` oggi:
+
+1. `uv sync --extra voce --extra chatterbox`
+2. prepara il `.env` del gateway (chiave generata se manca, **mai stampata**;
+   `LOCALROUTER_MODO=sinergo`; ascolto solo su `127.0.0.1` via `SINERGO_BIND_HOST`)
+3. registra **una sola** voce di avvio automatico Windows (`HKCU\...\Run\Sinergo` →
+   `autostart.vbs sinergo` → `Sinergo.bat`)
+4. se `http://127.0.0.1:<PORT>/health` non risponde, avvia il gateway (`server.py`);
+   se risponde gia' (LocalRouter acceso), prova anche `GET /v1/models` con la
+   chiave che usera' il collegato: 200 → riusa; 401/403 → **non** avvia un
+   secondo processo (porta occupata) ed esce con messaggio chiaro
+5. avvia il collegato (`python -m collegato`), che legge `API_KEY`/`PORT` dallo
+   stesso `.env` (o da `SINERGO_GATEWAY_ENV`, vedi sotto)
+
+Niente cloudflared / tunnel: il gateway Sinergo resta sul computer.
+
+### Limiti e riuso del gateway gia' acceso
+
+- **Motore modelli non incluso.** Sinergo non installa llama-swap, Ollama né
+  LM Studio: serve un motore di modelli gia' presente sulla macchina. Senza
+  quello il gateway parte ma `/v1/models` resta vuoto.
+- **Gateway acceso con un'altra chiave.** Se sulla stessa `PORT` c'e' gia' un
+  LocalRouter (es. installazione `--server` in `C:\Localrouter`) e la chiave
+  nel `.env` di Sinergo non coincide, l'avvio si ferma senza lanciare un
+  secondo gateway. Due soluzioni (la chiave non viene mai stampata):
+  1. copia la `API_KEY` del LocalRouter acceso nel `.env` di Sinergo; oppure
+  2. imposta `SINERGO_GATEWAY_ENV=<percorso del suo .env>` (es.
+     `C:\Localrouter\.env`): Sinergo legge da li' `API_KEY` e `PORT` per il
+     controllo di riuso e per il collegato, senza duplicare segreti a mano.
+     Se il file indicato non esiste, errore chiaro.
+
+Su Windows, dopo la prima installazione: `Sinergo.bat` (stesso ordine: gateway se
+serve, poi collegato).
 Per scollegare: `.venv/bin/python -m collegato scollega`
 (Windows: `.venv\Scripts\python.exe -m collegato scollega`).
 

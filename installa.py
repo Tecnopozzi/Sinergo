@@ -1,15 +1,16 @@
 """
 Installa Sinergo collegato a Kairos oppure LocalRouter come SERVER o CLIENT.
 
-    python installa.py --sinergo             installa Sinergo e apre l'abbinamento
+    python installa.py --sinergo             installa Sinergo (gateway locale + collegato)
     python installa.py --server              genera la chiave se manca e la stampa
     python installa.py --rigenera-chiave     chiave nuova: la vecchia smette di valere
     python installa.py --client --nome NOME --indirizzo URL [--chiave K]
     python installa.py --client --elenco | --rimuovi NOME
 
-Le modalita' server/client scrivono nel .env accanto a questo file, compreso
-LOCALROUTER_MODO: `python server.py` lo legge e avvia il modo scelto.
-La modalita' Sinergo prepara il venv e avvia il collegamento senza toccare .env.
+Le modalita' server/client/sinergo scrivono nel .env accanto a questo file,
+compreso LOCALROUTER_MODO: `python server.py` lo legge e avvia il modo scelto.
+Sinergo prepara .env (chiave se manca, mai stampata), gateway solo su 127.0.0.1
+(senza cloudflared) e un solo avvio automatico che lancia gateway + collegato.
 """
 
 from __future__ import annotations
@@ -26,6 +27,140 @@ from pathlib import Path
 ENV = Path(__file__).resolve().parent / ".env"
 
 
+def gateway_vivo(porta: int) -> bool:
+    """True se http://127.0.0.1:<porta>/health risponde gia' (gateway riusabile)."""
+    import httpx
+
+    try:
+        risposta = httpx.get(
+            f"http://127.0.0.1:{int(porta)}/health",
+            timeout=2,
+            trust_env=False,
+            follow_redirects=False,
+        )
+    except httpx.HTTPError:
+        return False
+    return risposta.status_code == 200
+
+
+def gateway_accetta_chiave(porta: int, chiave: str) -> bool:
+    """True se GET /v1/models con Bearer chiave risponde 200; False su 401/403."""
+    import httpx
+
+    try:
+        risposta = httpx.get(
+            f"http://127.0.0.1:{int(porta)}/v1/models",
+            headers={"Authorization": f"Bearer {chiave}"},
+            timeout=2,
+            trust_env=False,
+            follow_redirects=False,
+        )
+    except httpx.HTTPError:
+        return False
+    if risposta.status_code in (401, 403):
+        return False
+    return risposta.status_code == 200
+
+
+def messaggio_gateway_altra_chiave(porta: int, cartella: Path) -> str:
+    """Messaggio d'errore senza stampare la chiave."""
+    return (
+        f"sulla {porta} c'e' gia' un LocalRouter con un'altra chiave: "
+        f"metti la sua API_KEY in {cartella}{os.sep}.env oppure "
+        f"imposta SINERGO_GATEWAY_ENV=<percorso del suo .env>"
+    )
+
+
+def risolvi_env_gateway(cartella: Path) -> Path:
+    """Percorso .env da cui leggere API_KEY/PORT (proprio o SINERGO_GATEWAY_ENV)."""
+    import config
+
+    esterno = (config.SINERGO_GATEWAY_ENV or "").strip()
+    if not esterno:
+        return cartella / ".env"
+    percorso = Path(esterno)
+    if not percorso.is_file():
+        raise SystemExit(
+            f"SINERGO_GATEWAY_ENV punta a un file assente: {percorso}"
+        )
+    return percorso
+
+
+def prepara_env_sinergo(percorso: Path = ENV) -> None:
+    """Chiave se manca (mai stampata), modo sinergo, ascolto solo in loopback."""
+    attuale = leggi_env(percorso)
+    valori: dict[str, str] = {
+        "LOCALROUTER_MODO": "sinergo",
+        "HOST": "127.0.0.1",
+        "SINERGO_BIND_HOST": "127.0.0.1",
+    }
+    if not attuale.get("API_KEY"):
+        valori["API_KEY"] = secrets.token_urlsafe(32)
+    scrivi_env(percorso, valori)
+
+
+def _python_venv(cartella: Path) -> Path:
+    return cartella / ".venv" / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
+
+
+def _env_per_collegato(percorso: Path, gateway_env: Path | None = None) -> dict[str, str]:
+    """Chiave e porta dal .env del gateway, senza chiederle all'utente."""
+    ambiente = dict(os.environ)
+    for nome, valore in leggi_env(percorso).items():
+        ambiente[nome] = valore
+    if gateway_env is not None and gateway_env != percorso:
+        esterni = leggi_env(gateway_env)
+        for nome in ("API_KEY", "PORT"):
+            if nome in esterni:
+                ambiente[nome] = esterni[nome]
+    return ambiente
+
+
+def lancia_gateway(cartella: Path, python: Path) -> None:
+    """Avvia server.py in background. Nessun cloudflared."""
+    logs = cartella / "logs"
+    logs.mkdir(exist_ok=True)
+    registro = open(logs / "server_sinergo.log", "a", encoding="utf-8")
+    kwargs: dict = {
+        "cwd": cartella,
+        "stdout": registro,
+        "stderr": subprocess.STDOUT,
+        "env": _env_per_collegato(cartella / ".env"),
+    }
+    if platform.system() == "Windows":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen([str(python), "server.py"], **kwargs)
+
+
+def avvia_runtime_sinergo(cartella: Path | None = None) -> None:
+    """Gateway se non c'e' gia', poi collegato. Una sola voce Run chiama qui."""
+    cartella = cartella or Path(__file__).resolve().parent
+    percorso_env = cartella / ".env"
+    # Idempotente: crea chiave/host se mancano, non cambia una chiave gia' presente.
+    prepara_env_sinergo(percorso_env)
+    python = _python_venv(cartella)
+    if not python.is_file():
+        raise SystemExit("manca .venv: esegui prima python installa.py --sinergo")
+    gateway_env = risolvi_env_gateway(cartella)
+    valori = leggi_env(gateway_env)
+    porta = int(valori.get("PORT") or "8088")
+    chiave = valori.get("API_KEY", "")
+    if gateway_vivo(porta):
+        # Porta occupata: riusa solo se la chiave del collegato e' accettata.
+        if not gateway_accetta_chiave(porta, chiave):
+            raise SystemExit(messaggio_gateway_altra_chiave(porta, cartella))
+    else:
+        lancia_gateway(cartella, python)
+    subprocess.run(
+        [str(python), "-m", "collegato"],
+        cwd=cartella,
+        check=True,
+        env=_env_per_collegato(percorso_env, gateway_env),
+    )
+
+
 def avvio_automatico_sinergo(cartella: Path) -> None:
     """Windows: voce dell'utente accanto agli avvii LocalRouter gia' presenti."""
     if platform.system() != "Windows":
@@ -39,11 +174,9 @@ def avvio_automatico_sinergo(cartella: Path) -> None:
 
 
 def installa_sinergo(cartella: Path | None = None) -> None:
-    """Ambiente del progetto e avvio diretto: questa modalita' non legge o scrive .env."""
+    """Dipendenze, .env Sinergo, avvio automatico, gateway (se serve) + collegato."""
     cartella = cartella or Path(__file__).resolve().parent
-    ambiente = cartella / ".venv"
-    # Il Python del venv vive in Scripts su Windows e in bin su Linux.
-    python = ambiente / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
+    python = _python_venv(cartella)
     print("Installazione Sinergo…")
     # Extra voce + chatterbox (codec.cpp: una sola ruota per CPU/AMD/NVIDIA).
     print("Dipendenze: uv sync --extra voce --extra chatterbox")
@@ -53,9 +186,10 @@ def installa_sinergo(cartella: Path | None = None) -> None:
     )
     if not python.is_file():
         raise SystemExit("uv sync non ha creato .venv")
+    prepara_env_sinergo(cartella / ".env")
     avvio_automatico_sinergo(cartella)
-    print("Avvio Sinergo. L'abbinamento si apre nel browser.")
-    subprocess.run([str(python), "-m", "collegato"], cwd=cartella, check=True)
+    print("Avvio Sinergo (gateway locale se serve, poi collegamento a Kairos).")
+    avvia_runtime_sinergo(cartella)
 
 
 def leggi_env(percorso: Path) -> dict[str, str]:
@@ -191,7 +325,7 @@ def main() -> None:
     modo.add_argument("--server", action="store_true")
     modo.add_argument("--rigenera-chiave", action="store_true")
     modo.add_argument("--client", action="store_true")
-    modo.add_argument("--sinergo", action="store_true", help="installa Sinergo e apre il collegamento a Kairos")
+    modo.add_argument("--sinergo", action="store_true", help="installa Sinergo (gateway locale + collegamento a Kairos)")
     p.add_argument("--indirizzo", help="solo client: indirizzo del server, es. https://gpu.example.it")
     p.add_argument("--chiave", help="solo client: la chiave stampata dal server")
     p.add_argument("--nome", help="solo client: nome univoco del server, es. 5060")

@@ -89,6 +89,11 @@ CHIAVE_REMOTA: str = _env_str("LOCALROUTER_CHIAVE", "")
 
 # 127.0.0.1 = solo questa macchina (dietro il tunnel); 0.0.0.0 = anche la rete di casa.
 HOST: str = _env_str("HOST", "127.0.0.1")
+# Host di ascolto del gateway in modo Sinergo: sempre loopback, mai rete/tunnel.
+SINERGO_BIND_HOST: str = _env_str("SINERGO_BIND_HOST", "127.0.0.1")
+# Opzionale: percorso del .env del LocalRouter gia' acceso (API_KEY/PORT per riuso).
+# Se impostato, Sinergo legge chiave e porta da li' invece che dal proprio .env.
+SINERGO_GATEWAY_ENV: str = _env_str("SINERGO_GATEWAY_ENV", "")
 # Stessa porta del progetto 10 (8088): sostituisce direttamente il vecchio server.
 PORT: int = _env_int("PORT", 8088)
 # Solo modalita' client: porte locali aggiuntive su cui esporre la stessa app

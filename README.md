@@ -92,6 +92,10 @@ python server.py
 
 See `INSTALLAZIONE.md` and `CONFIGURAZIONE.md`. Client mode (pipe to a remote GPU server): `python installa.py --client --help`.
 
+### Maintainers: public release branch (`rilascio`)
+
+Sinergo is published from LocalRouter’s `rilascio` branch only (never from `main` by the cron). Advance `rilascio` by hand after green tests and a real GPU check (`installa.py --sinergo` on a copy, pair, open the UI, run `rispondi`): `git push origin main:rilascio` (fast-forward only). CODICE or Luca do that step; the cron never moves `rilascio`. Details: `sinergo/CRON.md` in the private LocalRouter repo.
+
 ### License
 
 **To be defined** — Luca will choose a license at public release.
@@ -187,6 +191,10 @@ python server.py
 ```
 
 Vedi `INSTALLAZIONE.md` e `CONFIGURAZIONE.md`. Modo client (tubo verso un server GPU remoto): `python installa.py --client --help`.
+
+### Manutenzione: ramo pubblico (`rilascio`)
+
+Sinergo si pubblica solo dal ramo `rilascio` di LocalRouter (mai da `main` via cron). Si avanza a mano dopo test verdi e prova vera su una GPU (`installa.py --sinergo` su una copia, abbina, vista + `rispondi`): `git push origin main:rilascio` (solo fast-forward). Lo fanno CODICE o Luca; il cron non muove `rilascio`. Dettaglio: `sinergo/CRON.md` nella repo privata LocalRouter.
 
 ### Licenza
 

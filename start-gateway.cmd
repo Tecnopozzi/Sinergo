@@ -13,3 +13,7 @@ if exist "server.py" (
     echo ERRORE: manca server.py >> "logs\server_autostart.log"
     exit /b 1
 )
+REM Macchina abbinata a Kairos: stesso avvio lancia anche il collegato (ex Sinergo separato).
+if exist "%LOCALAPPDATA%\LocalRouter\macchina.key" if exist "collegato\__main__.py" (
+    start "LocalRouter-collegato" /MIN ".venv\Scripts\python.exe" -m collegato
+)
