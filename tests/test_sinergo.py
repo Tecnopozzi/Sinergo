@@ -261,3 +261,72 @@ async def test_indirizzo_cambiato_nella_pagina_interrompe_attesa_precedente(tmp_
     assert chiamate == ['http://127.0.0.1:9200', nuovo]
     assert codici[0] != codici[1]
     assert collegata == [nuovo]
+
+
+@pytest.mark.asyncio
+async def test_avvia_abbinata_riprova_dopo_oserror(tmp_path, monkeypatch, caplog):
+    """Macchina già abbinata: OSError da esegui → log + backoff, poi riparte."""
+    from collegato import __main__ as cli
+    chiavi.salva(b'p' * 32, b'k' * 32, 'idm', tmp_path, pk_comandi=b'c' * 32,
+                 indirizzo='http://127.0.0.1:9200')
+    monkeypatch.setattr(chiavi, 'cartella', lambda: tmp_path)
+    chiamate = []
+    dormite = []
+
+    async def esegui(indirizzo, d=None):
+        chiamate.append((indirizzo, d))
+        if len(chiamate) == 1:
+            raise OSError('collegamento caduto')
+
+    async def dormi(secondi):
+        dormite.append(secondi)
+
+    monkeypatch.setattr(cli.canale, 'esegui', esegui)
+    monkeypatch.setattr(cli.asyncio, 'sleep', dormi)
+    caplog.set_level(logging.ERROR)
+    await asyncio.wait_for(cli.avvia(), 2)
+    assert chiamate == [('http://127.0.0.1:9200', tmp_path),
+                        ('http://127.0.0.1:9200', tmp_path)]
+    assert dormite == [1]
+    assert 'collegamento caduto' in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_avvia_abbinata_esce_dopo_revoca(tmp_path, monkeypatch):
+    """Revoca durante l'errore: niente riprova infinita, avvia termina."""
+    from collegato import __main__ as cli
+    chiavi.salva(b'p' * 32, b'k' * 32, 'idm', tmp_path, pk_comandi=b'c' * 32,
+                 indirizzo='http://127.0.0.1:9200')
+    monkeypatch.setattr(chiavi, 'cartella', lambda: tmp_path)
+    chiamate = []
+    dormite = []
+
+    async def esegui(indirizzo, d=None):
+        chiamate.append(1)
+        chiavi.revoca(tmp_path)
+        raise OSError('revocato')
+
+    async def dormi(secondi):
+        dormite.append(secondi)
+
+    monkeypatch.setattr(cli.canale, 'esegui', esegui)
+    monkeypatch.setattr(cli.asyncio, 'sleep', dormi)
+    await asyncio.wait_for(cli.avvia(), 2)
+    assert chiamate == [1]
+    assert dormite == []
+    assert not chiavi.abbinata(tmp_path)
+
+
+def test_main_oserror_registrata_nel_log(tmp_path, monkeypatch, caplog):
+    """Uscita da main: traceback in log, non solo la riga su stderr."""
+    from collegato import __main__ as cli
+    monkeypatch.setattr(chiavi, 'cartella', lambda: tmp_path)
+
+    async def avvia_boom(d=None):
+        raise OSError('silenzio mortale')
+
+    monkeypatch.setattr(cli, 'avvia', avvia_boom)
+    caplog.set_level(logging.ERROR)
+    assert cli.main([]) == 1
+    assert 'silenzio mortale' in caplog.text
+    assert 'Traceback' in caplog.text

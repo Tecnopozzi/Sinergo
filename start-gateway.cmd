@@ -15,5 +15,5 @@ if exist "server.py" (
 )
 REM Macchina abbinata a Kairos: stesso avvio lancia anche il collegato (ex Sinergo separato).
 if exist "%LOCALAPPDATA%\LocalRouter\macchina.key" if exist "collegato\__main__.py" (
-    start "LocalRouter-collegato" /MIN ".venv\Scripts\python.exe" -m collegato
+    start "LocalRouter-collegato" /MIN cmd /c ".venv\Scripts\python.exe -m collegato >> logs\collegato.log 2>&1"
 )

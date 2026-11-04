@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import sys
 import webbrowser
 from pathlib import Path
@@ -11,11 +12,29 @@ from . import attesa, canale, chiavi, pagina, trova
 from .codice import AbbinamentoFallito, Richiesta
 from .scheda import scheda
 
+logger = logging.getLogger("sinergo.collegato")
+
+
+async def _collega_abbinata(d: Path) -> None:
+    """Macchina già abbinata: errori transitori → log + backoff 1→60 s, non uscita."""
+    ritardo = 1
+    while chiavi.abbinata(d):
+        try:
+            await canale.esegui(chiavi.indirizzo(d), d=d)
+            return
+        except Exception:  # ponytail: causa della morte del 03/11 ignota, nessun errore deve chiudere una macchina abbinata
+            if not chiavi.abbinata(d):
+                return
+            logger.exception(
+                "Sinergo: errore transitorio sul collegamento, riprovo tra %s s", ritardo)
+            await asyncio.sleep(ritardo)
+            ritardo = min(ritardo * 2, 60)
+
 
 async def avvia(d: Path | None = None) -> None:
     d = d or chiavi.cartella()
     if chiavi.abbinata(d):
-        await canale.esegui(chiavi.indirizzo(d), d=d)
+        await _collega_abbinata(d)
         return
 
     richiesta = Richiesta()
@@ -70,7 +89,7 @@ async def avvia(d: Path | None = None) -> None:
                 richiesta = Richiesta()
                 stato.codice = richiesta.codice
                 continue
-        await canale.esegui(chiavi.indirizzo(d), d=d)
+        await _collega_abbinata(d)
     finally:
         server.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -87,12 +106,22 @@ def main(argv: list[str] | None = None) -> int:
     if argv:
         print(__doc__, file=sys.stderr)
         return 2
+    if not logging.root.handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+        )
     try:
         asyncio.run(avvia())
     except KeyboardInterrupt:
         return 0
     except (OSError, ValueError, AbbinamentoFallito):
+        logger.exception(
+            'Sinergo: collegamento non disponibile. Riapri Sinergo per riprovare.')
         print('Sinergo: collegamento non disponibile. Riapri Sinergo per riprovare.', file=sys.stderr)
+        return 1
+    except Exception:
+        logger.exception('Sinergo: errore imprevisto, collegato chiuso')
         return 1
     return 0
 
